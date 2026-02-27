@@ -1,0 +1,12 @@
+Evaluation summary
+episodes: 5
+mean total reward: 14.060
+mean abs track error (deg): 0.850
+mean abs altitude error (ft): 325.950
+
+Per episode:
+ep=0 steps=42 total_reward=13.935 mean_step_reward=0.332 mean_abs_track_error_deg=0.868 mean_abs_altitude_error_ft=337.464 final_altitude_ft=5000.0
+ep=1 steps=42 total_reward=14.092 mean_step_reward=0.336 mean_abs_track_error_deg=0.846 mean_abs_altitude_error_ft=323.072 final_altitude_ft=5000.0
+ep=2 steps=42 total_reward=14.092 mean_step_reward=0.336 mean_abs_track_error_deg=0.846 mean_abs_altitude_error_ft=323.072 final_altitude_ft=5000.0
+ep=3 steps=42 total_reward=14.092 mean_step_reward=0.336 mean_abs_track_error_deg=0.846 mean_abs_altitude_error_ft=323.072 final_altitude_ft=5000.0
+ep=4 steps=42 total_reward=14.092 mean_step_reward=0.336 mean_abs_track_error_deg=0.846 mean_abs_altitude_error_ft=323.072 final_altitude_ft=5000.0

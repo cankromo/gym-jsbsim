@@ -409,6 +409,20 @@ class TurnHeadingControlTask(HeadingControlTask):
     A task in which the agent must make a turn from a random initial heading,
     and fly level to a random target heading.
     """
+    DEFAULT_EPISODE_STEPS = 550
+
+    def __init__(self, shaping_type: Shaping, step_frequency_hz: float, aircraft: Aircraft,
+                 episode_time_s: float = None, positive_rewards: bool = True):
+        # If caller does not specify duration, target 550 agent steps by default.
+        if episode_time_s is None:
+            episode_time_s = self.DEFAULT_EPISODE_STEPS / step_frequency_hz
+        super().__init__(
+            shaping_type=shaping_type,
+            step_frequency_hz=step_frequency_hz,
+            aircraft=aircraft,
+            episode_time_s=episode_time_s,
+            positive_rewards=positive_rewards,
+        )
 
     def get_initial_conditions(self) -> [Dict[Property, float]]:
         initial_conditions = super().get_initial_conditions()

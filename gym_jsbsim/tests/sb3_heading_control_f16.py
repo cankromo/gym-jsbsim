@@ -7,7 +7,8 @@ from typing import Iterable, List
 import numpy as np
 
 from gym_jsbsim import tasks, aircraft, properties as prp
-from gym_jsbsim.environment import NoFGJsbSimEnv
+from gym_jsbsim.environment import JsbSimEnv
+from gym_jsbsim import simulation as simulation_module
 
 try:
     import shimmy
@@ -19,12 +20,67 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 DEFAULT_MODEL_DIR = os.path.join(REPO_ROOT, "models", "heading_control_f16")
 DEFAULT_MODEL_PATH = os.path.join(DEFAULT_MODEL_DIR, "ppo_heading_control_f16.zip")
 DEFAULT_VECNORM_PATH = os.path.join(DEFAULT_MODEL_DIR, "vecnormalize.pkl")
-DEFAULT_EVAL_CSV = os.path.join(DEFAULT_MODEL_DIR, "eval_metrics.csv")
+DEFAULT_EVAL_CSV = os.path.join(REPO_ROOT, "models", "eval_outputs", "heading_control_f16_eval_metrics.csv")
+TASK_MAP = {
+    "heading": tasks.HeadingControlTask,
+    "turn": tasks.TurnHeadingControlTask,
+}
 
 
-def _make_env(shaping: tasks.Shaping, agent_interaction_freq: int) -> NoFGJsbSimEnv:
-    return NoFGJsbSimEnv(
-        task_type=tasks.HeadingControlTask,
+def _apply_jsbsim_runtime_compat() -> None:
+    """
+    Runtime compatibility patching for newer JSBSim releases.
+    Keeps library defaults untouched by patching only in this script.
+    """
+    sim_cls = simulation_module.Simulation
+    if getattr(sim_cls, "_sb3_runtime_compat_applied", False):
+        return
+
+    # Prefer explicit override, otherwise use jsbsim package default root dir.
+    root_dir = os.environ.get("JSBSIM_ROOT_DIR")
+    if not root_dir:
+        try:
+            import jsbsim
+
+            default_root = getattr(jsbsim, "get_default_root_dir", lambda: None)()
+            if default_root:
+                root_dir = default_root
+        except Exception:
+            root_dir = None
+
+    if root_dir:
+        resolved_root = os.path.abspath(os.path.expanduser(str(root_dir)))
+        if os.path.isdir(resolved_root):
+            sim_cls.ROOT_DIR = resolved_root
+
+    def _initialise_compat(self, dt, model_name, init_conditions=None) -> None:
+        if init_conditions is not None:
+            ic_file = "minimal_ic.xml"
+        else:
+            ic_file = "basic_ic.xml"
+
+        ic_path = os.path.join(os.path.dirname(os.path.abspath(simulation_module.__file__)), ic_file)
+        try:
+            self.jsbsim.load_ic(ic_path, useStoredPath=False)
+        except TypeError:
+            self.jsbsim.load_ic(ic_path, False)
+
+        self.load_model(model_name)
+        self.jsbsim.set_dt(dt)
+        self.set_custom_initial_conditions(init_conditions)
+
+        success = self.jsbsim.run_ic()
+        if not success:
+            raise RuntimeError("JSBSim failed to init simulation conditions.")
+
+    sim_cls.initialise = _initialise_compat
+    sim_cls._sb3_runtime_compat_applied = True
+
+
+def _make_env(shaping: tasks.Shaping, agent_interaction_freq: int, task_type) -> JsbSimEnv:
+    _apply_jsbsim_runtime_compat()
+    return JsbSimEnv(
+        task_type=task_type,
         aircraft=aircraft.f16,
         agent_interaction_freq=agent_interaction_freq,
         shaping=shaping,
@@ -40,12 +96,16 @@ def _wrap_gymnasium_if_needed(env):
     return shimmy.GymV21CompatibilityV0(env=env)
 
 
-def _make_vec_env(shaping: tasks.Shaping, agent_interaction_freq: int):
+def _make_vec_env(shaping: tasks.Shaping, agent_interaction_freq: int, task_type):
     from stable_baselines3.common.monitor import Monitor
     from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
     def _init():
-        env = _make_env(shaping=shaping, agent_interaction_freq=agent_interaction_freq)
+        env = _make_env(
+            shaping=shaping,
+            agent_interaction_freq=agent_interaction_freq,
+            task_type=task_type,
+        )
         env = _wrap_gymnasium_if_needed(env)
         return Monitor(env)
 
@@ -60,11 +120,16 @@ def train_heading_control_f16(
     model_dir: str = DEFAULT_MODEL_DIR,
     agent_interaction_freq: int = 5,
     shaping: tasks.Shaping = tasks.Shaping.EXTRA_SEQUENTIAL,
+    task_type=tasks.HeadingControlTask,
 ):
     from stable_baselines3 import PPO
 
     os.makedirs(model_dir, exist_ok=True)
-    vec_env = _make_vec_env(shaping=shaping, agent_interaction_freq=agent_interaction_freq)
+    vec_env = _make_vec_env(
+        shaping=shaping,
+        agent_interaction_freq=agent_interaction_freq,
+        task_type=task_type,
+    )
     model = PPO(
         "MlpPolicy",
         vec_env,
@@ -88,10 +153,11 @@ def _extend_props(props: List[prp.Property], extra: Iterable[prp.Property]) -> N
             props.append(prop)
 
 
-def _metric_props(env: NoFGJsbSimEnv) -> List[prp.Property]:
+def _metric_props(env: JsbSimEnv) -> List[prp.Property]:
     props: List[prp.Property] = list(env.task.state_variables)
     extras = [
         prp.heading_deg,
+        prp.lat_geod_deg,
         prp.altitude_rate_fps,
         prp.v_north_fps,
         prp.v_east_fps,
@@ -123,13 +189,18 @@ def evaluate_heading_control_f16(
     print_every: int = 25,
     agent_interaction_freq: int = 5,
     shaping: tasks.Shaping = tasks.Shaping.EXTRA_SEQUENTIAL,
+    task_type=tasks.HeadingControlTask,
 ):
     from stable_baselines3 import PPO
     from stable_baselines3.common.monitor import Monitor
     from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
     def _init():
-        env = _make_env(shaping=shaping, agent_interaction_freq=agent_interaction_freq)
+        env = _make_env(
+            shaping=shaping,
+            agent_interaction_freq=agent_interaction_freq,
+            task_type=task_type,
+        )
         env = _wrap_gymnasium_if_needed(env)
         return Monitor(env)
 
@@ -141,7 +212,7 @@ def evaluate_heading_control_f16(
 
     model = PPO.load(model_path, env=vec_env)
 
-    base_env: NoFGJsbSimEnv = vec_env.envs[0].unwrapped
+    base_env: JsbSimEnv = vec_env.envs[0].unwrapped
     props = _metric_props(base_env)
 
     os.makedirs(os.path.dirname(csv_path), exist_ok=True)
@@ -182,6 +253,7 @@ def evaluate_heading_control_f16(
 
                 if print_every > 0 and step % print_every == 0:
                     heading = sim[prp.heading_deg]
+                    latitude = sim[prp.lat_geod_deg]
                     roll_deg = row["roll_deg"]
                     pitch_deg = row["pitch_deg"]
                     altitude = sim[prp.altitude_sl_ft]
@@ -189,7 +261,7 @@ def evaluate_heading_control_f16(
                     print(
                         f"ep={episode} step={step} reward={reward_scalar:.3f} "
                         f"heading_deg={heading:.2f} roll_deg={roll_deg:.2f} "
-                        f"pitch_deg={pitch_deg:.2f} altitude_ft={altitude:.1f} "
+                        f"pitch_deg={pitch_deg:.2f} lat_deg={latitude:.5f} altitude_ft={altitude:.1f} "
                         f"track_error_deg={track_err:.2f}"
                     )
 
@@ -214,6 +286,7 @@ def _parse_args():
     parser.add_argument("--csv-path", type=str, default=DEFAULT_EVAL_CSV)
     parser.add_argument("--agent-freq", type=int, default=5)
     parser.add_argument("--shaping", type=str, default=tasks.Shaping.EXTRA_SEQUENTIAL.name)
+    parser.add_argument("--task", type=str, default="turn", choices=sorted(TASK_MAP.keys()))
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--print-every", type=int, default=25)
     parser.add_argument("--deterministic", action="store_true")
@@ -227,6 +300,7 @@ def _parse_shaping(shaping_str: str) -> tasks.Shaping:
 def main():
     args = _parse_args()
     shaping = _parse_shaping(args.shaping)
+    task_type = TASK_MAP[args.task]
 
     if args.mode == "train":
         train_heading_control_f16(
@@ -235,6 +309,7 @@ def main():
             model_dir=args.model_dir,
             agent_interaction_freq=args.agent_freq,
             shaping=shaping,
+            task_type=task_type,
         )
     else:
         evaluate_heading_control_f16(
@@ -246,6 +321,7 @@ def main():
             print_every=args.print_every,
             agent_interaction_freq=args.agent_freq,
             shaping=shaping,
+            task_type=task_type,
         )
 
 
