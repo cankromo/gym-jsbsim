@@ -2,6 +2,7 @@ import argparse
 import csv
 import math
 import os
+import random
 from typing import Iterable, List
 
 import numpy as np
@@ -25,6 +26,13 @@ TASK_MAP = {
     "heading": tasks.HeadingControlTask,
     "turn": tasks.TurnHeadingControlTask,
 }
+
+
+class EvalRandomTargetTurnHeadingControlTask(tasks.TurnHeadingControlTask):
+    """Eval-only task variant: keep task dynamics, but sample random target heading."""
+
+    def _get_target_track(self) -> float:
+        return random.uniform(self.target_track_deg.min, self.target_track_deg.max)
 
 
 def _apply_jsbsim_runtime_compat() -> None:
@@ -290,6 +298,7 @@ def _parse_args():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--print-every", type=int, default=25)
     parser.add_argument("--deterministic", action="store_true")
+    parser.add_argument("--eval-random-target", action="store_true")
     return parser.parse_args()
 
 
@@ -312,6 +321,9 @@ def main():
             task_type=task_type,
         )
     else:
+        eval_task_type = task_type
+        if args.task == "turn" and args.eval_random_target:
+            eval_task_type = EvalRandomTargetTurnHeadingControlTask
         evaluate_heading_control_f16(
             model_path=args.model_path,
             vecnormalize_path=args.vecnormalize_path,
@@ -321,7 +333,7 @@ def main():
             print_every=args.print_every,
             agent_interaction_freq=args.agent_freq,
             shaping=shaping,
-            task_type=task_type,
+            task_type=eval_task_type,
         )
 
 

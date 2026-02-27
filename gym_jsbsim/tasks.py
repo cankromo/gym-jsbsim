@@ -409,13 +409,18 @@ class TurnHeadingControlTask(HeadingControlTask):
     A task in which the agent must make a turn from a random initial heading,
     and fly level to a random target heading.
     """
-    DEFAULT_EPISODE_STEPS = 550
+    DEFAULT_EPISODE_STEPS = 750
+    ALLOWED_HEADINGS_DEG = (0.0, 90.0, -90.0)
+    FIXED_INITIAL_HEADING_DEG = 0.0
 
     def __init__(self, shaping_type: Shaping, step_frequency_hz: float, aircraft: Aircraft,
                  episode_time_s: float = None, positive_rewards: bool = True):
         # If caller does not specify duration, target 550 agent steps by default.
         if episode_time_s is None:
             episode_time_s = self.DEFAULT_EPISODE_STEPS / step_frequency_hz
+        self._last_initial_heading = None
+        self._last_target_heading = None
+        self._current_initial_heading = None
         super().__init__(
             shaping_type=shaping_type,
             step_frequency_hz=step_frequency_hz,
@@ -424,13 +429,23 @@ class TurnHeadingControlTask(HeadingControlTask):
             positive_rewards=positive_rewards,
         )
 
+    def _sample_discrete_heading(self, *forbidden) -> float:
+        forbidden_set = {h for h in forbidden if h is not None}
+        choices = [h for h in self.ALLOWED_HEADINGS_DEG if h not in forbidden_set]
+        if not choices:
+            choices = list(self.ALLOWED_HEADINGS_DEG)
+        return random.choice(choices)
+
     def get_initial_conditions(self) -> [Dict[Property, float]]:
         initial_conditions = super().get_initial_conditions()
-        random_heading = random.uniform(prp.heading_deg.min, prp.heading_deg.max)
-        initial_conditions[prp.initial_heading_deg] = random_heading
+        self._current_initial_heading = self.FIXED_INITIAL_HEADING_DEG
+        self._last_initial_heading = self.FIXED_INITIAL_HEADING_DEG
+        initial_conditions[prp.initial_heading_deg] = self.FIXED_INITIAL_HEADING_DEG
         return initial_conditions
 
     def _get_target_track(self) -> float:
-        # select a random heading each episode
-        return random.uniform(self.target_track_deg.min,
-                              self.target_track_deg.max)
+        # Select from fixed set while avoiding immediate repetition and
+        # avoiding no-turn episodes where target equals current initial heading.
+        target = self._sample_discrete_heading(self._last_target_heading, self._current_initial_heading)
+        self._last_target_heading = target
+        return target
