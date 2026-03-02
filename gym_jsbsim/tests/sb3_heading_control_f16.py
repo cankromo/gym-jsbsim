@@ -35,6 +35,30 @@ class EvalRandomTargetTurnHeadingControlTask(tasks.TurnHeadingControlTask):
         return random.uniform(self.target_track_deg.min, self.target_track_deg.max)
 
 
+class PeriodicTurnHeadingControlTask(tasks.TurnHeadingControlTask):
+    """
+    Turn task with periodic 45-degree targets in [0, 360] notation.
+    Excludes headings equivalent to initial heading (0 deg), including 360.
+    """
+
+    ALLOWED_HEADINGS_DEG = (0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0, 360.0)
+
+    @staticmethod
+    def _norm_heading(hdg: float) -> float:
+        # Canonicalize to [0, 360) so 0 and 360 are treated as identical.
+        return float(hdg) % 360.0
+
+    def _sample_discrete_heading(self, *forbidden) -> float:
+        forbidden_norm = {self._norm_heading(h) for h in forbidden if h is not None}
+        choices = [h for h in self.ALLOWED_HEADINGS_DEG if self._norm_heading(h) not in forbidden_norm]
+        if not choices:
+            choices = list(self.ALLOWED_HEADINGS_DEG)
+        return random.choice(choices)
+
+
+TASK_MAP["turn"] = PeriodicTurnHeadingControlTask
+
+
 def _apply_jsbsim_runtime_compat() -> None:
     """
     Runtime compatibility patching for newer JSBSim releases.
@@ -303,7 +327,10 @@ def _parse_args():
 
 
 def _parse_shaping(shaping_str: str) -> tasks.Shaping:
-    return tasks.Shaping[shaping_str]
+    normalized = shaping_str.strip().upper()
+    if normalized == "SEQUENTIAL":
+        normalized = tasks.Shaping.EXTRA_SEQUENTIAL.name
+    return tasks.Shaping[normalized]
 
 
 def main():
