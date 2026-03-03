@@ -613,6 +613,7 @@
       <div id="plot_geo3d" class="plot"></div>
       <div id="plot_alt" class="plot"></div>
       <div id="plot_att" class="plot"></div>
+      <div id="plot_roll_metrics" class="plot"></div>
       <div id="plot_hdg" class="plot"></div>
       <div id="plot_reward" class="plot"></div>
       <div id="plot_rates" class="plot"></div>
@@ -904,6 +905,17 @@
     ], {
       ...commonLayout,
       title: 'Attitude',
+      xaxis: { title: 'Step' },
+      yaxis: { title: 'Degrees' }
+    }, { responsive: true, displaylogo: false });
+
+    Plotly.newPlot('plot_roll_metrics', [
+      { x: a.step, y: a.currentRoll, mode: 'lines', name: 'Current Roll (deg)', line: { color: '#22d3ee', width: 2.5 } },
+      { x: a.step, y: a.targetRoll, mode: 'lines', name: 'Target Roll (deg)', line: { color: '#f59e0b', width: 2, dash: 'dot' } },
+      { x: a.step, y: a.rollErr, mode: 'lines', name: 'Roll Error (deg)', line: { color: '#ef4444', width: 2, dash: 'dash' } }
+    ], {
+      ...commonLayout,
+      title: 'Roll Metrics vs Time',
       xaxis: { title: 'Step' },
       yaxis: { title: 'Degrees' }
     }, { responsive: true, displaylogo: false });
