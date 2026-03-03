@@ -428,6 +428,7 @@ class TurnHeadingControlTask(HeadingControlTask):
         self._last_initial_heading = None
         self._last_target_heading = None
         self._current_initial_heading = None
+        self.roll_target_tracking_component = None
         super().__init__(
             shaping_type=shaping_type,
             step_frequency_hz=step_frequency_hz,
@@ -473,6 +474,7 @@ class TurnHeadingControlTask(HeadingControlTask):
             max_target_roll_deg=self.ROLL_TARGET_MAX_DEG,
             roll_error_scaling_deg=self.ROLL_ERROR_SCALING_DEG,
         )
+        self.roll_target_tracking_component = roll_target_tracking
         potential_based_components = (wings_level, no_sideslip, roll_target_tracking)
 
         if shaping is Shaping.EXTRA:
@@ -484,6 +486,11 @@ class TurnHeadingControlTask(HeadingControlTask):
             return assessors.ContinuousSequentialAssessor(base_components, potential_based_components,
                                                           potential_dependency_map=dependency_map,
                                                           positive_rewards=self.positive_rewards)
+
+    def get_target_roll_deg(self, track_error_deg: float) -> float:
+        if self.roll_target_tracking_component is not None:
+            return self.roll_target_tracking_component.get_target_roll_deg(track_error_deg)
+        return 0.0
 
     def get_initial_conditions(self) -> [Dict[Property, float]]:
         initial_conditions = super().get_initial_conditions()

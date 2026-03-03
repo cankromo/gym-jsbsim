@@ -530,6 +530,9 @@
       <div class="card"><div class="k">Current Target (deg)</div><div class="v" id="m_tgt_now">-</div></div>
       <div class="card"><div class="k">Track Error (deg)</div><div class="v" id="m_err">-</div></div>
       <div class="card"><div class="k">Reward</div><div class="v" id="m_rew">-</div></div>
+      <div class="card"><div class="k">Target Roll (deg)</div><div class="v" id="m_tgt_roll">-</div></div>
+      <div class="card"><div class="k">Current Roll (deg)</div><div class="v" id="m_cur_roll">-</div></div>
+      <div class="card"><div class="k">Roll Error (deg)</div><div class="v" id="m_roll_err">-</div></div>
     </div>
 
     <div class="hud-wrap">
@@ -781,6 +784,9 @@
       step,
       reward: epRows.map(r => col(r, ['reward'], 0)),
       roll: epRows.map(r => col(r, ['roll_deg'], 0)),
+      targetRoll: epRows.map(r => col(r, ['target_roll_deg'], 0)),
+      currentRoll: epRows.map(r => col(r, ['current_roll_deg', 'roll_deg'], 0)),
+      rollErr: epRows.map(r => col(r, ['roll_error_deg'], 0)),
       pitch: epRows.map(r => col(r, ['pitch_deg'], col(r, ['attitude_pitch_rad'], 0) * 180 / Math.PI)),
       hdg: epRows.map(r => col(r, ['attitude_psi_deg', 'heading_deg'], 0)),
       tgt: epRows.map(r => col(r, ['target_track_deg'], 0)),
@@ -891,6 +897,8 @@
 
     Plotly.newPlot('plot_att', [
       { x: a.step, y: a.roll, mode: 'lines', name: 'Roll (deg)', line: { color: '#06b6d4' } },
+      { x: a.step, y: a.targetRoll, mode: 'lines', name: 'Target Roll (deg)', line: { color: '#f59e0b', dash: 'dot' } },
+      { x: a.step, y: a.rollErr, mode: 'lines', name: 'Roll Error (deg)', line: { color: '#ef4444', dash: 'dash' } },
       { x: a.step, y: a.pitch, mode: 'lines', name: 'Pitch (deg)', line: { color: '#f43f5e' } },
       { x: [a.step[0]], y: [a.roll[0]], mode: 'markers', marker: { size: 10, color: '#facc15' }, name: 'Live Roll' }
     ], {
@@ -964,6 +972,9 @@
     $('m_tgt_now').textContent = tgtNow.toFixed(1);
     $('m_err').textContent = col(r, ['error_track_error_deg', 'track_error_deg'], 0).toFixed(2);
     $('m_rew').textContent = col(r, ['reward'], 0).toFixed(3);
+    $('m_tgt_roll').textContent = col(r, ['target_roll_deg'], 0).toFixed(2);
+    $('m_cur_roll').textContent = col(r, ['current_roll_deg', 'roll_deg'], 0).toFixed(2);
+    $('m_roll_err').textContent = col(r, ['roll_error_deg'], 0).toFixed(2);
     $('hud_alt').textContent = col(r, ['position_h_sl_ft', 'altitude_ft'], 0).toFixed(1);
     $('hud_vs').textContent = vz.toFixed(2);
     $('hud_lat').textContent = lat.toFixed(6);

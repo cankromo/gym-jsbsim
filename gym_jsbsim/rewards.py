@@ -287,11 +287,25 @@ class TurnRollTrackingRewardComponent(RewardComponent):
         return self.potential_difference_based
 
     def _target_roll_deg(self, track_error_deg: float) -> float:
-        if abs(track_error_deg) <= self.capture_heading_error_deg:
-            return 0.0
         # track_error is (current - target), so desired turn sign is opposite.
         unclipped_target = -self.roll_target_gain * track_error_deg
-        return float(max(-self.max_target_roll_deg, min(self.max_target_roll_deg, unclipped_target)))
+        clipped_target = float(max(-self.max_target_roll_deg, min(self.max_target_roll_deg, unclipped_target)))
+
+        # Smoothly fade roll target to zero near heading capture band, instead of
+        # hard switching to 0 at threshold.
+        abs_error = abs(track_error_deg)
+        if abs_error >= self.capture_heading_error_deg:
+            return clipped_target
+        if self.capture_heading_error_deg <= 0:
+            return clipped_target
+
+        # Linear blend factor in [0,1]: 0 at zero heading error, 1 at capture band edge.
+        blend = abs_error / self.capture_heading_error_deg
+        return clipped_target * blend
+
+    def get_target_roll_deg(self, track_error_deg: float) -> float:
+        """Public helper for logging/inspection of the current target roll."""
+        return self._target_roll_deg(track_error_deg)
 
     def get_potential(self, state: State, is_terminal) -> float:
         if is_terminal and self.potential_difference_based:

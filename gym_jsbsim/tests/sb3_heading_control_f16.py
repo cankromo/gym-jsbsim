@@ -250,7 +250,7 @@ def evaluate_heading_control_f16(
     os.makedirs(os.path.dirname(csv_path), exist_ok=True)
     fieldnames = ["episode", "step", "reward", "done"] + [
         prop.get_legal_name() for prop in props
-    ] + ["roll_deg", "pitch_deg"]
+    ] + ["roll_deg", "pitch_deg", "target_roll_deg", "current_roll_deg", "roll_error_deg"]
 
     with open(csv_path, "w", newline="") as csv_file:
         writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
@@ -280,6 +280,15 @@ def evaluate_heading_control_f16(
                     row[prop.get_legal_name()] = float(sim[prop])
                 row["roll_deg"] = math.degrees(sim[prp.roll_rad])
                 row["pitch_deg"] = math.degrees(sim[prp.pitch_rad])
+                row["current_roll_deg"] = row["roll_deg"]
+
+                if isinstance(base_env.task, tasks.TurnHeadingControlTask):
+                    track_err = float(sim[base_env.task.track_error_deg])
+                    target_roll_deg = float(base_env.task.get_target_roll_deg(track_err))
+                else:
+                    target_roll_deg = 0.0
+                row["target_roll_deg"] = target_roll_deg
+                row["roll_error_deg"] = row["current_roll_deg"] - row["target_roll_deg"]
 
                 writer.writerow(row)
 
