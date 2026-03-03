@@ -41,96 +41,173 @@ def _html_with_data(data_json: str) -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>3D Flight Playback</title>
   <style>
-    :root {{
-      --bg0: #020617;
-      --bg1: #0b1b35;
-      --hud: #dbeafe;
-      --accent: #22d3ee;
-      --accent2: #f59e0b;
-    }}
-    html, body {{
+    :root {
+      --bg-top: #e2edf5;
+      --bg-bottom: #f8fbff;
+      --panel: rgba(255, 255, 255, 0.78);
+      --panel-border: rgba(148, 163, 184, 0.35);
+      --text-main: #0f172a;
+      --text-muted: #334155;
+      --accent: #0f766e;
+      --accent-2: #ea580c;
+      --accent-3: #2563eb;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    html, body {
       margin: 0;
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background: radial-gradient(1200px 600px at 20% 20%, #12356a 0%, var(--bg0) 60%);
-      color: var(--hud);
-      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
-    }}
-    #app {{
+      background:
+        radial-gradient(1200px 620px at 85% -15%, rgba(15, 118, 110, 0.16), transparent 62%),
+        radial-gradient(860px 500px at 10% 12%, rgba(234, 88, 12, 0.14), transparent 58%),
+        linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 65%);
+      color: var(--text-main);
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+    }
+    #app {
       position: fixed;
       inset: 0;
-    }}
-    #hud {{
+    }
+    .panel {
+      border: 1px solid var(--panel-border);
+      border-radius: 16px;
+      backdrop-filter: blur(8px);
+      background: var(--panel);
+      box-shadow: 0 12px 38px rgba(15, 23, 42, 0.12);
+    }
+    #title {
+      position: fixed;
+      top: 14px;
+      right: 14px;
+      padding: 10px 14px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      color: var(--text-main);
+    }
+    #hud {
       position: fixed;
       top: 14px;
       left: 14px;
+      min-width: 280px;
       padding: 12px 14px;
-      border: 1px solid rgba(148, 163, 184, 0.28);
-      border-radius: 12px;
-      background: rgba(2, 6, 23, 0.5);
-      backdrop-filter: blur(8px);
-      min-width: 260px;
-      box-shadow: 0 12px 40px rgba(2, 6, 23, 0.45);
-    }}
-    #hud h3 {{
+      animation: fade-up 500ms ease-out;
+    }
+    #hud h3 {
       margin: 0 0 8px;
-      color: #f8fafc;
-      letter-spacing: 0.3px;
       font-size: 16px;
-    }}
-    .kv {{
+      color: var(--text-main);
+    }
+    .kv {
       display: grid;
-      grid-template-columns: 112px auto;
+      grid-template-columns: 116px auto;
       gap: 6px;
       font-size: 13px;
-      line-height: 1.2;
+      line-height: 1.25;
       margin: 3px 0;
-    }}
-    .k {{ color: #93c5fd; }}
-    .v {{ color: #f8fafc; font-variant-numeric: tabular-nums; }}
-    #controls {{
+    }
+    .k {
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+    .v {
+      color: var(--text-main);
+      font-variant-numeric: tabular-nums;
+      font-weight: 700;
+    }
+    #controls {
       position: fixed;
       right: 14px;
       bottom: 14px;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
       padding: 10px 12px;
-      background: rgba(2, 6, 23, 0.5);
-      border: 1px solid rgba(148, 163, 184, 0.28);
-      border-radius: 12px;
-      backdrop-filter: blur(8px);
-    }}
-    button, select {{
-      background: #0f172a;
-      border: 1px solid #334155;
-      color: #e2e8f0;
-      border-radius: 8px;
-      padding: 6px 10px;
+      animation: fade-up 700ms ease-out;
+    }
+    #btnPlay {
+      background: linear-gradient(135deg, var(--accent), #0d9488);
+      border: 1px solid rgba(15, 118, 110, 0.55);
+      color: #f8fafc;
+      border-radius: 10px;
+      padding: 7px 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    #btnPlay:hover {
+      filter: brightness(1.03);
+    }
+    label {
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.15px;
+    }
+    select {
+      background: #ffffff;
+      border: 1px solid rgba(100, 116, 139, 0.45);
+      color: var(--text-main);
+      border-radius: 10px;
+      padding: 7px 10px;
       font-size: 13px;
-    }}
-    button:hover, select:hover {{ border-color: #64748b; }}
-    #timeline {{
+      font-weight: 600;
+      cursor: pointer;
+    }
+    #timeline {
       width: 320px;
       accent-color: var(--accent);
-    }}
-    #title {{
-      position: fixed;
-      top: 14px;
-      right: 14px;
-      color: #e2e8f0;
-      font-weight: 600;
-      text-shadow: 0 2px 14px rgba(2, 6, 23, 0.7);
-      letter-spacing: 0.4px;
-    }}
+      cursor: pointer;
+    }
+    #progress {
+      min-width: 66px;
+      text-align: right;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    @keyframes fade-up {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    @media (max-width: 900px) {
+      #hud {
+        min-width: 240px;
+        max-width: calc(100vw - 20px);
+      }
+      #controls {
+        left: 10px;
+        right: 10px;
+        bottom: 10px;
+        flex-wrap: wrap;
+      }
+      #timeline {
+        width: 100%;
+      }
+      #progress {
+        margin-left: auto;
+      }
+      #title {
+        top: auto;
+        bottom: 92px;
+        right: 10px;
+      }
+    }
   </style>
   <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
 </head>
 <body>
   <div id="app"></div>
-  <div id="title">3D Flight Simulation Playback</div>
-  <div id="hud">
+  <div id="title" class="panel">3D Flight Playback</div>
+
+  <div id="hud" class="panel">
     <h3>Aircraft State</h3>
     <div class="kv"><div class="k">Step</div><div class="v" id="s_step">-</div></div>
     <div class="kv"><div class="k">Heading</div><div class="v" id="s_hdg">-</div></div>
@@ -140,7 +217,8 @@ def _html_with_data(data_json: str) -> str:
     <div class="kv"><div class="k">Track Error</div><div class="v" id="s_err">-</div></div>
     <div class="kv"><div class="k">Reward</div><div class="v" id="s_reward">-</div></div>
   </div>
-  <div id="controls">
+
+  <div id="controls" class="panel">
     <button id="btnPlay">Pause</button>
     <label for="speedSel">Speed</label>
     <select id="speedSel">
@@ -150,48 +228,58 @@ def _html_with_data(data_json: str) -> str:
       <option value="4">4x</option>
     </select>
     <input id="timeline" type="range" min="0" max="100" value="0" />
+    <div id="progress">0 / 0</div>
   </div>
+
   <script>
     const DATA = __DATA_JSON__;
     const N = DATA.step.length;
     const app = document.getElementById("app");
     const scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(0x091225, 900, 4200);
+    scene.fog = new THREE.Fog(0xd8e6f3, 500, 4300);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
     app.appendChild(renderer.domElement);
 
-    const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 10000);
+    const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 12000);
     camera.position.set(0, -180, 80);
 
-    const hemi = new THREE.HemisphereLight(0xaed7ff, 0x1f2937, 1.15);
+    const hemi = new THREE.HemisphereLight(0xf1f5f9, 0xb6c6d7, 1.2);
     scene.add(hemi);
-    const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+    const dir = new THREE.DirectionalLight(0xffffff, 0.85);
     dir.position.set(220, -160, 300);
     scene.add(dir);
 
-    const grid = new THREE.GridHelper(5000, 100, 0x1f3b5f, 0x16324d);
+    const ground = new THREE.Mesh(
+      new THREE.CircleGeometry(4200, 100),
+      new THREE.MeshStandardMaterial({ color: 0xeaf2fa, roughness: 0.96, metalness: 0.03 })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    scene.add(ground);
+
+    const grid = new THREE.GridHelper(5000, 110, 0x8fb0ca, 0xc7d8e7);
     grid.rotation.x = Math.PI / 2;
     scene.add(grid);
 
     const aircraft = new THREE.Group();
     const fuselage = new THREE.Mesh(
       new THREE.BoxGeometry(18, 64, 10),
-      new THREE.MeshStandardMaterial({ color: 0xdbeafe, metalness: 0.25, roughness: 0.55 })
+      new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.28, roughness: 0.45 })
     );
-    fuselage.position.y = 0;
     aircraft.add(fuselage);
+
     const wings = new THREE.Mesh(
       new THREE.BoxGeometry(74, 8, 2),
-      new THREE.MeshStandardMaterial({ color: 0x38bdf8, metalness: 0.2, roughness: 0.5 })
+      new THREE.MeshStandardMaterial({ color: 0x0f766e, metalness: 0.18, roughness: 0.35 })
     );
     wings.position.y = -3;
     aircraft.add(wings);
+
     const tail = new THREE.Mesh(
       new THREE.BoxGeometry(14, 16, 2),
-      new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.2, roughness: 0.45 })
+      new THREE.MeshStandardMaterial({ color: 0xea580c, metalness: 0.18, roughness: 0.35 })
     );
     tail.position.set(0, 26, 8);
     aircraft.add(tail);
@@ -202,42 +290,45 @@ def _html_with_data(data_json: str) -> str:
     trailGeo.setDrawRange(0, 2);
     const trail = new THREE.Line(
       trailGeo,
-      new THREE.LineBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.92 })
+      new THREE.LineBasicMaterial({ color: 0x2563eb, transparent: true, opacity: 0.88 })
     );
     scene.add(trail);
 
-    const velArrow = new THREE.ArrowHelper(new THREE.Vector3(1,0,0), new THREE.Vector3(), 40, 0xf43f5e, 10, 6);
+    const velArrow = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(), 40, 0x0f766e, 10, 6);
     scene.add(velArrow);
 
-    const targetArrow = new THREE.ArrowHelper(new THREE.Vector3(1,0,0), new THREE.Vector3(), 36, 0xf59e0b, 8, 5);
+    const targetArrow = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(), 36, 0xea580c, 8, 5);
     scene.add(targetArrow);
 
     const el = (id) => document.getElementById(id);
     const timeline = el("timeline");
     timeline.max = String(Math.max(0, N - 1));
+
     let idx = 0;
     let playing = true;
     let speed = 1.0;
     let acc = 0;
     const dt = DATA.dt_sec;
 
-    el("btnPlay").onclick = () => {{
+    el("btnPlay").onclick = () => {
       playing = !playing;
       el("btnPlay").textContent = playing ? "Pause" : "Play";
-    }};
-    el("speedSel").onchange = (e) => {{
+    };
+
+    el("speedSel").onchange = (e) => {
       speed = parseFloat(e.target.value);
-    }};
-    timeline.oninput = (e) => {{
+    };
+
+    timeline.oninput = (e) => {
       idx = Math.max(0, Math.min(N - 1, parseInt(e.target.value, 10)));
       renderFrame(idx);
-    }};
+    };
 
-    function headingToYawRad(deg) {{
+    function headingToYawRad(deg) {
       return deg * Math.PI / 180.0;
-    }}
+    }
 
-    function renderFrame(i) {{
+    function renderFrame(i) {
       const x = DATA.x[i], y = DATA.y[i], z = DATA.z[i];
       aircraft.position.set(x, y, z);
 
@@ -245,7 +336,7 @@ def _html_with_data(data_json: str) -> str:
       const pitch = DATA.pitch_deg[i] * Math.PI / 180.0;
       const yaw = headingToYawRad(DATA.heading_deg[i]);
       aircraft.rotation.set(pitch, 0, -yaw, "ZYX");
-      aircraft.rotateY(Math.PI); // nose-forward alignment
+      aircraft.rotateY(Math.PI);
       aircraft.rotateZ(roll);
 
       trail.geometry.setDrawRange(0, Math.max(2, i + 1));
@@ -253,7 +344,7 @@ def _html_with_data(data_json: str) -> str:
       const ve = DATA.ve_mps[i], vn = DATA.vn_mps[i];
       const v = new THREE.Vector3(ve, vn, 0.0);
       const vLen = Math.max(12, Math.min(85, Math.hypot(ve, vn) * 1.25));
-      if (v.lengthSq() < 1e-6) v.set(1,0,0);
+      if (v.lengthSq() < 1e-6) v.set(1, 0, 0);
       v.normalize();
       velArrow.position.set(x, y, z + 6);
       velArrow.setDirection(v);
@@ -276,35 +367,37 @@ def _html_with_data(data_json: str) -> str:
       el("s_hdg").textContent = DATA.heading_deg[i].toFixed(1) + " deg";
       el("s_roll").textContent = DATA.roll_deg[i].toFixed(1) + " deg";
       el("s_pitch").textContent = DATA.pitch_deg[i].toFixed(1) + " deg";
-      el("s_alt").textContent = (DATA.alt_ft[i]).toFixed(0) + " ft";
+      el("s_alt").textContent = DATA.alt_ft[i].toFixed(0) + " ft";
       el("s_err").textContent = DATA.track_err_deg[i].toFixed(2) + " deg";
       el("s_reward").textContent = DATA.reward[i].toFixed(3);
+      el("progress").textContent = `${i + 1} / ${N}`;
       timeline.value = String(i);
-    }}
+    }
 
     let lastT = performance.now();
-    function tick(now) {{
+    function tick(now) {
       const delta = (now - lastT) / 1000.0;
       lastT = now;
-      if (playing) {{
+      if (playing) {
         acc += delta * speed;
-        while (acc >= dt && idx < N - 1) {{
+        while (acc >= dt && idx < N - 1) {
           idx += 1;
           acc -= dt;
-        }}
-      }}
+        }
+      }
       renderFrame(idx);
       renderer.render(scene, camera);
       requestAnimationFrame(tick);
-    }}
+    }
+
     renderFrame(0);
     requestAnimationFrame(tick);
 
-    window.addEventListener("resize", () => {{
+    window.addEventListener("resize", () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
-    }});
+    });
   </script>
 </body>
 </html>
