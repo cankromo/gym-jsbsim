@@ -1,4 +1,5 @@
 import gym_jsbsim.properties as prp
+import math
 from abc import ABC, abstractmethod
 from typing import Tuple, Union
 from gym_jsbsim.utils import reduce_reflex_angle_deg
@@ -251,6 +252,61 @@ class LinearErrorComponent(ErrorComponent):
 
     def _normalise_error(self, absolute_error: float):
         return normalise_error_linear(absolute_error, self.scaling_factor)
+
+
+class TurnRollTrackingRewardComponent(RewardComponent):
+    """
+    Turn-specific roll reward with two phases:
+    1) If heading error is large, track a non-zero target roll for turning.
+    2) Near target heading, track zero roll for stabilisation.
+    """
+
+    def __init__(self,
+                 name: str,
+                 roll_prop: prp.BoundedProperty,
+                 track_error_prop: prp.BoundedProperty,
+                 state_variables: Tuple[prp.BoundedProperty],
+                 is_potential_based: bool,
+                 capture_heading_error_deg: float,
+                 roll_target_gain: float,
+                 max_target_roll_deg: float,
+                 roll_error_scaling_deg: float):
+        self.name = name
+        self.potential_difference_based = is_potential_based
+        self.roll_index = state_variables.index(roll_prop)
+        self.track_error_index = state_variables.index(track_error_prop)
+        self.capture_heading_error_deg = capture_heading_error_deg
+        self.roll_target_gain = roll_target_gain
+        self.max_target_roll_deg = max_target_roll_deg
+        self.roll_error_scaling_deg = roll_error_scaling_deg
+
+    def get_name(self) -> str:
+        return self.name
+
+    def is_potential_difference_based(self) -> bool:
+        return self.potential_difference_based
+
+    def _target_roll_deg(self, track_error_deg: float) -> float:
+        if abs(track_error_deg) <= self.capture_heading_error_deg:
+            return 0.0
+        # track_error is (current - target), so desired turn sign is opposite.
+        unclipped_target = -self.roll_target_gain * track_error_deg
+        return float(max(-self.max_target_roll_deg, min(self.max_target_roll_deg, unclipped_target)))
+
+    def get_potential(self, state: State, is_terminal) -> float:
+        if is_terminal and self.potential_difference_based:
+            return 0.0
+
+        roll_deg = math.degrees(float(state[self.roll_index]))
+        track_error_deg = float(state[self.track_error_index])
+        target_roll_deg = self._target_roll_deg(track_error_deg)
+        roll_error_deg = abs(roll_deg - target_roll_deg)
+        return 1.0 - normalise_error_asymptotic(roll_error_deg, self.roll_error_scaling_deg)
+
+    def calculate(self, state: State, prev_state: State, is_terminal: bool) -> float:
+        if self.potential_difference_based:
+            return self.get_potential(state, is_terminal) - self.get_potential(prev_state, False)
+        return self.get_potential(state, is_terminal)
 
 
 def normalise_error_asymptotic(absolute_error: float, scaling_factor: float) -> float:

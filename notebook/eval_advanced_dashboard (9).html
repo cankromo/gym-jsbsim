@@ -1,0 +1,1092 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TUSAŞ Reinforcement Learning Track Panel</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    :root {
+      --bg-start: #030406;
+      --bg-end: #090b10;
+      --panel: rgba(13, 16, 23, 0.88);
+      --panel-solid: #0b1018;
+      --text: #e8edf7;
+      --muted: #91a0ba;
+      --accent: #22d3ee;
+      --accent-2: #f59e0b;
+      --accent-3: #60a5fa;
+      --border: rgba(71, 85, 105, 0.55);
+      --shadow: 0 16px 38px rgba(0, 0, 0, 0.52);
+      --shadow-soft: 0 10px 24px rgba(0, 0, 0, 0.42);
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      color: var(--text);
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      background:
+        radial-gradient(900px 500px at 10% 10%, rgba(34, 211, 238, 0.12), transparent 58%),
+        radial-gradient(900px 520px at 88% -8%, rgba(245, 158, 11, 0.12), transparent 60%),
+        linear-gradient(180deg, var(--bg-start) 0%, var(--bg-end) 65%);
+    }
+    .wrap {
+      max-width: 1620px;
+      margin: 0 auto;
+      padding: 14px;
+    }
+    .top, .timeline, .card, .hudpanel, .hudstats, .hudleft, .plot {
+      backdrop-filter: blur(8px);
+    }
+    .top {
+      display: grid;
+      grid-template-columns: 1fr auto auto auto auto;
+      gap: 12px;
+      align-items: center;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      padding: 12px;
+      position: sticky;
+      top: 12px;
+      z-index: 30;
+    }
+    .title {
+      font-size: 20px;
+      letter-spacing: 0.2px;
+      font-weight: 760;
+    }
+    .sub {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.15px;
+    }
+    .ctrl {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 12px;
+      color: var(--muted);
+      min-width: 120px;
+    }
+    .ctrl label {
+      font-weight: 650;
+      letter-spacing: 0.1px;
+    }
+    input, select, button {
+      background: #0e1520;
+      color: var(--text);
+      border: 1px solid rgba(71, 85, 105, 0.7);
+      border-radius: 10px;
+      padding: 8px 10px;
+      min-height: 36px;
+      font-size: 13px;
+      transition: all 120ms ease;
+    }
+    input:hover, select:hover, button:hover {
+      border-color: rgba(15, 118, 110, 0.7);
+    }
+    input:focus, select:focus, button:focus {
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.18);
+    }
+    #btnPlay {
+      color: #001018;
+      border-color: rgba(34, 211, 238, 0.5);
+      background: linear-gradient(135deg, #22d3ee, #0ea5e9);
+      font-weight: 700;
+    }
+    #btnRedraw {
+      color: #1b1200;
+      border-color: rgba(245, 158, 11, 0.55);
+      background: linear-gradient(135deg, #f59e0b, #f97316);
+      font-weight: 700;
+    }
+    .status {
+      margin-top: 10px;
+      font-size: 12px;
+      color: #fbbf24;
+      background: rgba(146, 64, 14, 0.14);
+      border: 1px solid rgba(245, 158, 11, 0.35);
+      border-radius: 10px;
+      padding: 8px 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .cards {
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: var(--shadow-soft);
+      padding: 10px;
+    }
+    .k {
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.08px;
+    }
+    .v {
+      font-size: 17px;
+      font-weight: 720;
+      margin-top: 2px;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+    .timeline {
+      margin-top: 10px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: var(--shadow-soft);
+      padding: 10px 12px;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 10px;
+      align-items: center;
+      position: sticky;
+      top: 92px;
+      z-index: 25;
+    }
+    .timeline > div:first-child {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+    }
+    #stepSlider {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+    #stepLabel {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 700;
+      min-width: 68px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .hud-wrap {
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: 1fr 380px 1fr;
+      gap: 10px;
+    }
+    .hudpanel, .hudstats, .hudleft {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px;
+      box-shadow: var(--shadow-soft);
+    }
+    .hudtitle {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+      margin-bottom: 8px;
+      letter-spacing: 0.08px;
+    }
+    .attitude {
+      position: relative;
+      width: 328px;
+      height: 328px;
+      margin: 0 auto;
+      border-radius: 50%;
+      overflow: hidden;
+      border: 2px solid rgba(100, 116, 139, 0.6);
+      background: #020617;
+      box-shadow: inset 0 0 0 4px #0f172a, 0 0 28px rgba(37, 99, 235, 0.22);
+    }
+    .horizon {
+      position: absolute;
+      left: -164px;
+      top: -164px;
+      width: 656px;
+      height: 656px;
+      transform-origin: 50% 50%;
+      background: linear-gradient(to bottom, #1d4ed8 0 50%, #9a3412 50% 100%);
+    }
+    .hline {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 50%;
+      border-top: 2px solid #e2e8f0;
+      opacity: 0.95;
+    }
+    .pitch-ladder {
+      position: absolute;
+      inset: 0;
+    }
+    .pitch-mark {
+      position: absolute;
+      left: 50%;
+      width: 122px;
+      margin-left: -61px;
+      border-top: 2px solid rgba(248, 250, 252, 0.94);
+    }
+    .pitch-mark.small {
+      width: 72px;
+      margin-left: -36px;
+      opacity: 0.88;
+    }
+    .pitch-mark .lbl {
+      position: absolute;
+      top: -9px;
+      font-size: 10px;
+      color: #f1f5f9;
+      background: rgba(2, 6, 23, 0.55);
+      padding: 0 4px;
+      border-radius: 4px;
+    }
+    .pitch-mark .lbl.l { left: -22px; }
+    .pitch-mark .lbl.r { right: -22px; }
+    .bank-arc {
+      position: absolute;
+      inset: 8px;
+      border-radius: 50%;
+      pointer-events: none;
+    }
+    .bank-tick {
+      position: absolute;
+      left: 50%;
+      top: 3px;
+      width: 2px;
+      height: 12px;
+      background: #f8fafc;
+      transform-origin: 50% 156px;
+      opacity: 0.92;
+    }
+    .bank-tick.major { height: 16px; width: 3px; }
+    .bank-pointer {
+      position: absolute;
+      left: 50%;
+      top: 2px;
+      width: 0;
+      height: 0;
+      border-left: 8px solid transparent;
+      border-right: 8px solid transparent;
+      border-bottom: 12px solid #facc15;
+      transform: translateX(-50%);
+      filter: drop-shadow(0 0 8px rgba(250, 204, 21, 0.5));
+      z-index: 4;
+    }
+    .wings {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 142px;
+      height: 8px;
+      border-top: 3px solid #f8fafc;
+      border-bottom: 3px solid #f8fafc;
+      z-index: 4;
+    }
+    .center-dot {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #facc15;
+      transform: translate(-50%, -50%);
+      z-index: 5;
+      box-shadow: 0 0 10px rgba(250, 204, 21, 0.7);
+    }
+    .fpm {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 18px;
+      height: 18px;
+      border: 2px solid #22d3ee;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 4;
+      opacity: 0.95;
+      transition: transform 120ms linear;
+    }
+    .fpm::before, .fpm::after {
+      content: "";
+      position: absolute;
+      background: #22d3ee;
+    }
+    .fpm::before {
+      left: 7px;
+      top: -8px;
+      width: 2px;
+      height: 7px;
+    }
+    .fpm::after {
+      left: -10px;
+      top: 7px;
+      width: 8px;
+      height: 2px;
+      box-shadow: 28px 0 0 #22d3ee;
+    }
+    .heading-tape {
+      position: absolute;
+      left: 50%;
+      bottom: 12px;
+      transform: translateX(-50%);
+      min-width: 196px;
+      text-align: center;
+      padding: 5px 10px;
+      border-radius: 9px;
+      background: rgba(15, 23, 42, 0.78);
+      border: 1px solid #475569;
+      color: #f1f5f9;
+      font-size: 12px;
+      letter-spacing: 0.45px;
+      z-index: 6;
+      font-variant-numeric: tabular-nums;
+    }
+    .hud-readout {
+      margin-top: 8px;
+      text-align: center;
+      font-size: 13px;
+      color: #dbeafe;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .hudstats, .hudleft {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+      align-content: start;
+    }
+    .hudleft {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      align-content: stretch;
+    }
+    .mini, .instrument {
+      background: var(--panel-solid);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.12);
+    }
+    .mini { padding: 8px; }
+    .mini .k { font-size: 11px; }
+    .mini .v {
+      font-size: 15px;
+      font-variant-numeric: tabular-nums;
+    }
+    .instrument { padding: 10px; }
+    .gauge-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+      font-weight: 650;
+    }
+    .gauge-track {
+      height: 12px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: #111827;
+      border: 1px solid rgba(71, 85, 105, 0.7);
+    }
+    .gauge-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #22d3ee, #0f766e);
+      transition: width 120ms linear;
+    }
+    .gauge-fill.warn {
+      background: linear-gradient(90deg, #f59e0b, #dc2626);
+    }
+    .cmd-track {
+      position: relative;
+      height: 14px;
+      border-radius: 999px;
+      background: #111827;
+      border: 1px solid rgba(71, 85, 105, 0.7);
+      overflow: hidden;
+    }
+    .cmd-center {
+      position: absolute;
+      left: 50%;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: #94a3b8;
+      transform: translateX(-1px);
+      opacity: 0.9;
+    }
+    .cmd-pos, .cmd-neg {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 0%;
+      transition: width 120ms linear;
+    }
+    .cmd-pos { left: 50%; background: linear-gradient(90deg, #16a34a, #15803d); }
+    .cmd-neg { right: 50%; background: linear-gradient(90deg, #ef4444, #ea580c); }
+    .vbar-wrap {
+      display: flex;
+      justify-content: center;
+      padding: 4px 0 2px;
+    }
+    .vbar-track {
+      width: 42px;
+      height: 140px;
+      border-radius: 12px;
+      background: #111827;
+      border: 1px solid rgba(71, 85, 105, 0.7);
+      position: relative;
+      overflow: hidden;
+    }
+    .vbar-fill {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 0%;
+      background: linear-gradient(180deg, #22d3ee 0%, #0f766e 70%, #2563eb 100%);
+      transition: height 120ms linear;
+    }
+    .grid {
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .plot {
+      height: 390px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: var(--shadow-soft);
+      overflow: hidden;
+    }
+    .wide { grid-column: 1 / span 2; height: 460px; }
+    @media (max-width: 1200px) {
+      .top { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 1100px) {
+      .top { grid-template-columns: 1fr; top: 8px; }
+      .cards { grid-template-columns: repeat(2, 1fr); }
+      .timeline { grid-template-columns: 1fr; top: 82px; }
+      .hud-wrap { grid-template-columns: 1fr; }
+      .grid { grid-template-columns: 1fr; }
+      .wide { grid-column: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div>
+        <div class="title">TUSAŞ Reinforcement Learning Track Panel</div>
+        <div class="sub">Trajectory, lat-lon, altitude, roll, pitch, heading, controls, reward</div>
+      </div>
+      <div class="ctrl">
+        <label>CSV File</label>
+        <input id="csvFile" type="file" accept=".csv,text/csv" />
+      </div>
+      <div class="ctrl">
+        <label>Episode</label>
+        <select id="episodeSel"></select>
+      </div>
+      <div class="ctrl">
+        <label>Playback Speed</label>
+        <select id="speedSel">
+          <option value="0.5">0.5x</option>
+          <option value="1" selected>1x</option>
+          <option value="2">2x</option>
+          <option value="4">4x</option>
+        </select>
+      </div>
+      <div class="ctrl">
+        <label>Actions</label>
+        <div style="display:flex; gap:6px;">
+          <button id="btnPlay">Pause</button>
+          <button id="btnRedraw">Redraw</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="status" id="status">Load a CSV to begin.</div>
+
+    <div class="timeline">
+      <div>Global Timeline</div>
+      <input id="stepSlider" type="range" min="0" max="0" value="0" />
+      <div id="stepLabel">0 / 0</div>
+    </div>
+
+    <div class="cards">
+      <div class="card"><div class="k">Step</div><div class="v" id="m_step">-</div></div>
+      <div class="card"><div class="k">Initial Heading (deg)</div><div class="v" id="m_hdg_init">-</div></div>
+      <div class="card"><div class="k">Current Target (deg)</div><div class="v" id="m_tgt_now">-</div></div>
+      <div class="card"><div class="k">Track Error (deg)</div><div class="v" id="m_err">-</div></div>
+      <div class="card"><div class="k">Reward</div><div class="v" id="m_rew">-</div></div>
+    </div>
+
+    <div class="hud-wrap">
+      <div class="hudleft">
+        <div class="mini"><div class="k">Altitude (ft)</div><div class="v" id="hud_alt">-</div></div>
+        <div class="mini"><div class="k">Vertical Speed (fps)</div><div class="v" id="hud_vs">-</div></div>
+        <div class="mini"><div class="k">Latitude (deg)</div><div class="v" id="hud_lat">-</div></div>
+        <div class="mini"><div class="k">Longitude (deg)</div><div class="v" id="hud_lon">-</div></div>
+        <div class="mini"><div class="k">Airspeed (fps)</div><div class="v" id="hud_speed">-</div></div>
+        <div class="mini"><div class="k">Heading (deg)</div><div class="v" id="hud_heading">-</div></div>
+      </div>
+      <div class="hudpanel">
+        <div class="hudtitle">Live Attitude HUD</div>
+        <div class="attitude">
+          <div class="bank-arc">
+            <div class="bank-tick major" style="transform: translateX(-50%) rotate(-60deg)"></div>
+            <div class="bank-tick" style="transform: translateX(-50%) rotate(-45deg)"></div>
+            <div class="bank-tick major" style="transform: translateX(-50%) rotate(-30deg)"></div>
+            <div class="bank-tick" style="transform: translateX(-50%) rotate(-20deg)"></div>
+            <div class="bank-tick" style="transform: translateX(-50%) rotate(-10deg)"></div>
+            <div class="bank-tick major" style="transform: translateX(-50%) rotate(0deg)"></div>
+            <div class="bank-tick" style="transform: translateX(-50%) rotate(10deg)"></div>
+            <div class="bank-tick" style="transform: translateX(-50%) rotate(20deg)"></div>
+            <div class="bank-tick major" style="transform: translateX(-50%) rotate(30deg)"></div>
+            <div class="bank-tick" style="transform: translateX(-50%) rotate(45deg)"></div>
+            <div class="bank-tick major" style="transform: translateX(-50%) rotate(60deg)"></div>
+          </div>
+          <div class="bank-pointer" id="hudBankPointer"></div>
+          <div class="horizon" id="hudHorizon">
+            <div class="hline"></div>
+            <div class="pitch-ladder" id="hudPitchLadder"></div>
+          </div>
+          <div class="wings"></div>
+          <div class="fpm" id="hudFpm"></div>
+          <div class="center-dot"></div>
+          <div class="heading-tape" id="hudHeadingTape">HDG 000</div>
+        </div>
+        <div class="hud-readout" id="hudText">ROLL 0.0 | PITCH 0.0 | HDG 0.0</div>
+      </div>
+      <div class="hudstats">
+        <div class="instrument">
+          <div class="gauge-row"><span>Roll Command</span><span id="m_roll_cmd">0.00</span></div>
+          <div class="cmd-track">
+            <div class="cmd-center"></div>
+            <div id="g_roll_pos" class="cmd-pos"></div>
+            <div id="g_roll_neg" class="cmd-neg"></div>
+          </div>
+        </div>
+        <div class="instrument">
+          <div class="gauge-row"><span>Pitch Command</span><span id="m_pitch_cmd">0.00</span></div>
+          <div class="cmd-track">
+            <div class="cmd-center"></div>
+            <div id="g_pitch_pos" class="cmd-pos"></div>
+            <div id="g_pitch_neg" class="cmd-neg"></div>
+          </div>
+        </div>
+        <div class="instrument">
+          <div class="gauge-row"><span>Aileron Command</span><span id="m_ail_hud">0.00</span></div>
+          <div class="cmd-track">
+            <div class="cmd-center"></div>
+            <div id="g_ail_pos" class="cmd-pos"></div>
+            <div id="g_ail_neg" class="cmd-neg"></div>
+          </div>
+        </div>
+        <div class="instrument">
+          <div class="gauge-row"><span>Throttle</span><span id="m_throttle_v">0.00</span></div>
+          <div class="vbar-wrap">
+            <div class="vbar-track">
+              <div id="g_throttle_v" class="vbar-fill"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div id="plot_traj" class="plot wide"></div>
+      <div id="plot_geo3d" class="plot"></div>
+      <div id="plot_alt" class="plot"></div>
+      <div id="plot_att" class="plot"></div>
+      <div id="plot_hdg" class="plot"></div>
+      <div id="plot_reward" class="plot"></div>
+      <div id="plot_rates" class="plot"></div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+
+  const statusEl = $('status');
+  const episodeSel = $('episodeSel');
+  const speedSel = $('speedSel');
+  const slider = $('stepSlider');
+  const stepLabel = $('stepLabel');
+
+  const state = {
+    rows: [],
+    episodes: [],
+    epRows: [],
+    idx: 0,
+    playing: true,
+    speed: 1,
+    timer: null,
+    dt: 0.2,
+    traces: null
+  };
+
+  function toNum(v, d = 0) {
+    const x = Number(v);
+    return Number.isFinite(x) ? x : d;
+  }
+
+  function clamp(v, lo, hi) {
+    return Math.max(lo, Math.min(hi, v));
+  }
+
+  function initHud() {
+    const ladder = $('hudPitchLadder');
+    if (!ladder) return;
+    ladder.innerHTML = '';
+    // Draw ±90 deg pitch ladder marks every 5 deg (major at 10 deg).
+    for (let p = -90; p <= 90; p += 5) {
+      if (p === 0) continue;
+      const mark = document.createElement('div');
+      const major = (Math.abs(p) % 10 === 0);
+      mark.className = `pitch-mark${major ? '' : ' small'}`;
+      // 2 px per degree gives readable spacing and smooth movement.
+      const y = 50 - (p * 2);
+      mark.style.top = `${y}%`;
+      if (major) {
+        const l = document.createElement('span');
+        l.className = 'lbl l';
+        l.textContent = String(Math.abs(p));
+        const r = document.createElement('span');
+        r.className = 'lbl r';
+        r.textContent = String(Math.abs(p));
+        mark.appendChild(l);
+        mark.appendChild(r);
+      }
+      ladder.appendChild(mark);
+    }
+  }
+
+  function parseCSV(text) {
+    const lines = text.trim().split(/\r?\n/);
+    if (lines.length < 2) throw new Error('CSV has no rows.');
+
+    function parseLine(line) {
+      const out = [];
+      let cur = '';
+      let inQ = false;
+      for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (c === '"') {
+          if (inQ && line[i + 1] === '"') { cur += '"'; i++; }
+          else inQ = !inQ;
+        } else if (c === ',' && !inQ) {
+          out.push(cur);
+          cur = '';
+        } else {
+          cur += c;
+        }
+      }
+      out.push(cur);
+      return out;
+    }
+
+    const header = parseLine(lines[0]).map(h => h.trim());
+    const rows = [];
+    for (let i = 1; i < lines.length; i++) {
+      if (!lines[i].trim()) continue;
+      const cols = parseLine(lines[i]);
+      const row = {};
+      for (let c = 0; c < header.length; c++) row[header[c]] = (cols[c] || '').trim();
+      rows.push(row);
+    }
+    return rows;
+  }
+
+  function col(row, names, fallback = 0) {
+    for (const n of names) {
+      if (row[n] !== undefined && row[n] !== '') return toNum(row[n], fallback);
+    }
+    return fallback;
+  }
+
+  function deriveGeo(epRows) {
+    const lat = [];
+    const lon = [];
+    const eastM = [];
+    const northM = [];
+    const alt = [];
+
+    const first = epRows[0] || {};
+    let latCur = col(first, ['position_lat_geod_deg', 'lat_deg'], 0);
+    let lonCur = col(first, ['position_long_gc_deg', 'position_lon_geod_deg', 'lon_deg'], 0);
+    let e = 0;
+    let n = 0;
+
+    for (let i = 0; i < epRows.length; i++) {
+      const r = epRows[i];
+      const vnMps = col(r, ['velocities_v_north_fps'], 0) * 0.3048;
+      const veMps = col(r, ['velocities_v_east_fps'], 0) * 0.3048;
+      if (i > 0) {
+        n += vnMps * state.dt;
+        e += veMps * state.dt;
+      }
+
+      const latRaw = col(r, ['position_lat_geod_deg', 'lat_deg'], NaN);
+      const lonRaw = col(r, ['position_long_gc_deg', 'position_lon_geod_deg', 'lon_deg'], NaN);
+
+      if (Number.isFinite(latRaw)) {
+        latCur = latRaw;
+      } else {
+        latCur += (vnMps * state.dt) / 111320;
+      }
+
+      if (Number.isFinite(lonRaw)) {
+        lonCur = lonRaw;
+      } else {
+        const denom = 111320 * Math.max(Math.cos(latCur * Math.PI / 180), 0.05);
+        lonCur += (veMps * state.dt) / denom;
+      }
+
+      lat.push(latCur);
+      lon.push(lonCur);
+      eastM.push(e);
+      northM.push(n);
+      alt.push(col(r, ['position_h_sl_ft', 'altitude_ft'], 0));
+    }
+
+    return { lat, lon, eastM, northM, alt };
+  }
+
+  function updateEpisodeList() {
+    episodeSel.innerHTML = '';
+    state.episodes.forEach((ep) => {
+      const opt = document.createElement('option');
+      opt.value = String(ep);
+      opt.textContent = `Episode ${ep}`;
+      episodeSel.appendChild(opt);
+    });
+  }
+
+  function stepArrays(epRows) {
+    const step = epRows.map((r, i) => col(r, ['step'], i));
+    return {
+      step,
+      reward: epRows.map(r => col(r, ['reward'], 0)),
+      roll: epRows.map(r => col(r, ['roll_deg'], 0)),
+      pitch: epRows.map(r => col(r, ['pitch_deg'], col(r, ['attitude_pitch_rad'], 0) * 180 / Math.PI)),
+      hdg: epRows.map(r => col(r, ['attitude_psi_deg', 'heading_deg'], 0)),
+      tgt: epRows.map(r => col(r, ['target_track_deg'], 0)),
+      terr: epRows.map(r => col(r, ['error_track_error_deg', 'track_error_deg'], 0)),
+      cmdAil: epRows.map(r => col(r, ['fcs_aileron_cmd_norm'], 0)),
+      cmdEle: epRows.map(r => col(r, ['fcs_elevator_cmd_norm'], 0)),
+      cmdRud: epRows.map(r => col(r, ['fcs_rudder_cmd_norm'], 0)),
+      posAilL: epRows.map(r => col(r, ['fcs_left_aileron_pos_norm'], 0)),
+      posAilR: epRows.map(r => col(r, ['fcs_right_aileron_pos_norm'], 0)),
+      posEle: epRows.map(r => col(r, ['fcs_elevator_pos_norm'], 0)),
+      posRud: epRows.map(r => col(r, ['fcs_rudder_pos_norm'], 0)),
+      vn: epRows.map(r => col(r, ['velocities_v_north_fps'], 0)),
+      ve: epRows.map(r => col(r, ['velocities_v_east_fps'], 0)),
+      vz: epRows.map(r => col(r, ['velocities_h_dot_fps'], 0))
+    };
+  }
+
+  function plotAll() {
+    const epRows = state.epRows;
+    if (!epRows.length) return;
+
+    const a = stepArrays(epRows);
+    const g = deriveGeo(epRows);
+    state.traces = { ...a, ...g };
+
+    const commonLayout = {
+      template: 'plotly_dark',
+      paper_bgcolor: '#111a2d',
+      plot_bgcolor: '#111a2d',
+      font: { color: '#dbeafe' },
+      margin: { l: 45, r: 16, t: 42, b: 40 },
+      showlegend: true,
+      legend: { orientation: 'h', y: 1.12 }
+    };
+
+    Plotly.newPlot('plot_traj', [
+      { x: g.eastM, y: g.northM, mode: 'lines', line: { width: 3, color: '#22d3ee' }, name: 'Track (E/N)' },
+      { x: [g.eastM[0]], y: [g.northM[0]], mode: 'markers', marker: { size: 9, color: '#10b981' }, name: 'Start' },
+      { x: [g.eastM[g.eastM.length - 1]], y: [g.northM[g.northM.length - 1]], mode: 'markers', marker: { size: 10, color: '#ef4444' }, name: 'End' },
+      { x: [g.eastM[0]], y: [g.northM[0]], mode: 'markers', marker: { size: 12, color: '#facc15', symbol: 'diamond' }, name: 'Live', hoverinfo: 'skip' }
+    ], {
+      ...commonLayout,
+      title: 'North-East Trajectory',
+      xaxis: { title: 'East displacement (m)' },
+      yaxis: { title: 'North displacement (m)', scaleanchor: 'x', scaleratio: 1 }
+    }, { responsive: true, displaylogo: false });
+
+    Plotly.newPlot('plot_geo3d', [
+      {
+        type: 'scatter3d',
+        mode: 'lines',
+        x: g.lon,
+        y: g.lat,
+        z: g.alt,
+        name: 'Flight Path',
+        line: { width: 5, color: '#60a5fa' }
+      },
+      {
+        type: 'scatter3d',
+        mode: 'markers',
+        x: [g.lon[0]],
+        y: [g.lat[0]],
+        z: [g.alt[0]],
+        name: 'Start',
+        marker: { size: 4.5, color: '#10b981' }
+      },
+      {
+        type: 'scatter3d',
+        mode: 'markers',
+        x: [g.lon[g.lon.length - 1]],
+        y: [g.lat[g.lat.length - 1]],
+        z: [g.alt[g.alt.length - 1]],
+        name: 'End',
+        marker: { size: 4.5, color: '#ef4444' }
+      },
+      {
+        type: 'scatter3d',
+        mode: 'markers',
+        x: [g.lon[0]],
+        y: [g.lat[0]],
+        z: [g.alt[0]],
+        name: 'Live',
+        marker: { size: 5.5, color: '#facc15', symbol: 'diamond' }
+      }
+    ], {
+      ...commonLayout,
+      title: '3D Geodetic Trajectory (Lon / Lat / Alt)',
+      scene: {
+        bgcolor: '#111a2d',
+        xaxis: { title: 'Longitude (deg)', showbackground: true, backgroundcolor: '#0f172a' },
+        yaxis: { title: 'Latitude (deg)', showbackground: true, backgroundcolor: '#0f172a' },
+        zaxis: { title: 'Altitude (ft)', showbackground: true, backgroundcolor: '#0f172a' },
+        aspectmode: 'manual',
+        aspectratio: { x: 1.35, y: 1.0, z: 0.6 },
+        camera: { eye: { x: 1.55, y: -1.4, z: 0.95 } }
+      }
+    }, { responsive: true, displaylogo: false });
+
+    Plotly.newPlot('plot_alt', [
+      { x: a.step, y: g.alt, mode: 'lines', name: 'Altitude (ft)', line: { color: '#f59e0b', width: 2.8 } },
+      { x: [a.step[0]], y: [g.alt[0]], mode: 'markers', marker: { size: 10, color: '#facc15' }, name: 'Live Alt' }
+    ], {
+      ...commonLayout,
+      title: 'Altitude',
+      xaxis: { title: 'Step' },
+      yaxis: { title: 'Feet' }
+    }, { responsive: true, displaylogo: false });
+
+    Plotly.newPlot('plot_att', [
+      { x: a.step, y: a.roll, mode: 'lines', name: 'Roll (deg)', line: { color: '#06b6d4' } },
+      { x: a.step, y: a.pitch, mode: 'lines', name: 'Pitch (deg)', line: { color: '#f43f5e' } },
+      { x: [a.step[0]], y: [a.roll[0]], mode: 'markers', marker: { size: 10, color: '#facc15' }, name: 'Live Roll' }
+    ], {
+      ...commonLayout,
+      title: 'Attitude',
+      xaxis: { title: 'Step' },
+      yaxis: { title: 'Degrees' }
+    }, { responsive: true, displaylogo: false });
+
+    Plotly.newPlot('plot_hdg', [
+      { x: a.step, y: a.hdg, mode: 'lines', name: 'Heading', line: { color: '#22c55e' } },
+      { x: a.step, y: a.tgt, mode: 'lines', name: 'Target Track', line: { color: '#f59e0b' } },
+      { x: a.step, y: a.terr, mode: 'lines', name: 'Track Error', line: { color: '#ef4444', dash: 'dot' } }
+    ], {
+      ...commonLayout,
+      title: 'Heading / Target / Error',
+      xaxis: { title: 'Step' },
+      yaxis: { title: 'Degrees' }
+    }, { responsive: true, displaylogo: false });
+
+    Plotly.newPlot('plot_reward', [
+      { x: a.step, y: a.reward, mode: 'lines', name: 'Reward', line: { color: '#38bdf8' } }
+    ], {
+      ...commonLayout,
+      title: 'Reward',
+      xaxis: { title: 'Step' },
+      yaxis: { title: 'Reward' }
+    }, { responsive: true, displaylogo: false });
+
+    Plotly.newPlot('plot_rates', [
+      { x: a.step, y: a.vn, mode: 'lines', name: 'V North (fps)', line: { color: '#22d3ee' } },
+      { x: a.step, y: a.ve, mode: 'lines', name: 'V East (fps)', line: { color: '#a78bfa' } },
+      { x: a.step, y: a.vz, mode: 'lines', name: 'Vertical Speed (fps)', line: { color: '#f43f5e' } }
+    ], {
+      ...commonLayout,
+      title: 'Velocity Components',
+      xaxis: { title: 'Step' },
+      yaxis: { title: 'fps' }
+    }, { responsive: true, displaylogo: false });
+
+    slider.min = 0;
+    slider.max = String(Math.max(0, epRows.length - 1));
+    slider.value = '0';
+    stepLabel.textContent = `0 / ${epRows.length - 1}`;
+  }
+
+  function setMetrics(i) {
+    const r = state.epRows[i] || {};
+    const first = state.epRows[0] || {};
+    const t = state.traces;
+    const hdg = col(r, ['attitude_psi_deg', 'heading_deg'], 0);
+    const hdgInit = col(first, ['attitude_psi_deg', 'heading_deg'], 0);
+    const tgtNow = col(r, ['target_track_deg'], 0);
+    const tgtInit = col(first, ['target_track_deg'], 0);
+    const roll = col(r, ['roll_deg'], 0);
+    const pitch = col(r, ['pitch_deg'], 0);
+    const vz = col(r, ['velocities_h_dot_fps'], 0);
+    const u = col(r, ['velocities_u_fps'], 0);
+    const lat = col(r, ['position_lat_geod_deg', 'lat_deg'], 0);
+    const lon = col(r, ['position_long_gc_deg', 'position_lon_geod_deg', 'lon_deg'], 0);
+    const vn = col(r, ['velocities_v_north_fps'], 0);
+    const ve = col(r, ['velocities_v_east_fps'], 0);
+    const throttle = col(r, ['fcs_throttle_cmd_norm'], 0);
+    const ailCmd = col(r, ['fcs_aileron_cmd_norm'], 0);
+    const eleCmd = col(r, ['fcs_elevator_cmd_norm'], 0);
+    const rollCmd = Math.max(-1, Math.min(1, roll / 60.0));
+    const pitchCmd = Math.max(-1, Math.min(1, pitch / 30.0));
+
+    $('m_step').textContent = String(col(r, ['step'], i));
+    $('m_hdg_init').textContent = hdgInit.toFixed(1);
+    $('m_tgt_now').textContent = tgtNow.toFixed(1);
+    $('m_err').textContent = col(r, ['error_track_error_deg', 'track_error_deg'], 0).toFixed(2);
+    $('m_rew').textContent = col(r, ['reward'], 0).toFixed(3);
+    $('hud_alt').textContent = col(r, ['position_h_sl_ft', 'altitude_ft'], 0).toFixed(1);
+    $('hud_vs').textContent = vz.toFixed(2);
+    $('hud_lat').textContent = lat.toFixed(6);
+    $('hud_lon').textContent = lon.toFixed(6);
+    $('hud_speed').textContent = u.toFixed(1);
+    $('hud_heading').textContent = hdg.toFixed(1);
+    $('m_throttle_v').textContent = throttle.toFixed(2);
+    $('g_throttle_v').style.height = `${Math.max(0, Math.min(100, throttle * 100))}%`;
+    setCmdGauge(rollCmd, 'm_roll_cmd', 'g_roll_pos', 'g_roll_neg');
+    setCmdGauge(pitchCmd, 'm_pitch_cmd', 'g_pitch_pos', 'g_pitch_neg');
+    setCmdGauge(ailCmd, 'm_ail_hud', 'g_ail_pos', 'g_ail_neg');
+    updateHud(roll, pitch, hdg);
+
+    if (!t || !t.eastM || !t.northM) return;
+    stepLabel.textContent = `${i} / ${state.epRows.length - 1}`;
+
+    Plotly.restyle('plot_traj', { x: [[t.eastM[i]]], y: [[t.northM[i]]] }, [3]);
+    Plotly.restyle('plot_geo3d', { x: [[t.lon[i]]], y: [[t.lat[i]]], z: [[t.alt[i]]] }, [3]);
+    Plotly.restyle('plot_alt', { x: [[t.step[i]]], y: [[t.alt[i]]] }, [1]);
+    Plotly.restyle('plot_att', { x: [[t.step[i]]], y: [[t.roll[i]]] }, [2]);
+  }
+
+  function tick() {
+    if (!state.epRows.length || !state.playing) return;
+    const stride = Math.max(1, Math.floor(state.speed));
+    state.idx = Math.min(state.idx + stride, state.epRows.length - 1);
+    slider.value = String(state.idx);
+    setMetrics(state.idx);
+  }
+
+  function angleDiffDeg(a, b) {
+    let d = (a - b + 180) % 360;
+    if (d < 0) d += 360;
+    return d - 180;
+  }
+
+  function updateHud(rollDeg, pitchDeg, headingDeg) {
+    const hz = $('hudHorizon');
+    const txt = $('hudText');
+    const bankPtr = $('hudBankPointer');
+    const fpm = $('hudFpm');
+    const tape = $('hudHeadingTape');
+    const pitchPx = clamp(pitchDeg * 2.4, -95, 95);
+    const rollClamped = clamp(rollDeg, -85, 85);
+    const hdgNorm = ((headingDeg % 360) + 360) % 360;
+    hz.style.transform = `translateY(${pitchPx}px) rotate(${-rollClamped}deg)`;
+    bankPtr.style.transform = `translateX(-50%) rotate(${rollClamped}deg)`;
+    // FPM drifts with pitch and a little with bank to suggest inertial path.
+    const fpmX = clamp(rollDeg * 0.28, -32, 32);
+    const fpmY = clamp(-pitchDeg * 1.7, -42, 42);
+    fpm.style.transform = `translate(-50%, -50%) translate(${fpmX}px, ${fpmY}px)`;
+    tape.textContent = `HDG ${hdgNorm.toFixed(0).padStart(3, '0')}`;
+    txt.textContent = `ROLL ${rollDeg.toFixed(1)} | PITCH ${pitchDeg.toFixed(1)} | HDG ${hdgNorm.toFixed(1)}`;
+  }
+
+  function setCmdGauge(value, textId, posId, negId) {
+    const v = Math.max(-1, Math.min(1, value));
+    const mag = Math.abs(v) * 50;
+    $(textId).textContent = v.toFixed(2);
+    $(posId).style.width = v > 0 ? `${mag}%` : '0%';
+    $(negId).style.width = v < 0 ? `${mag}%` : '0%';
+  }
+
+  function loadEpisode(ep) {
+    state.epRows = state.rows.filter(r => parseInt(r.episode || '0', 10) === ep);
+    state.idx = 0;
+    if (!state.epRows.length) {
+      statusEl.textContent = `Episode ${ep} has no rows.`;
+      statusEl.style.color = '#f87171';
+      return;
+    }
+    plotAll();
+    setMetrics(0);
+    statusEl.textContent = `Episode ${ep}: ${state.epRows.length} rows.`;
+    statusEl.style.color = '#fbbf24';
+  }
+
+  $('btnPlay').onclick = () => {
+    state.playing = !state.playing;
+    $('btnPlay').textContent = state.playing ? 'Pause' : 'Play';
+  };
+
+  $('btnRedraw').onclick = () => {
+    if (!state.rows.length) return;
+    const ep = parseInt(episodeSel.value, 10);
+    loadEpisode(ep);
+  };
+
+  speedSel.onchange = (e) => {
+    state.speed = parseFloat(e.target.value);
+  };
+
+  slider.oninput = (e) => {
+    const i = Math.max(0, Math.min(parseInt(e.target.value, 10), state.epRows.length - 1));
+    state.idx = i;
+    setMetrics(i);
+  };
+
+  episodeSel.onchange = (e) => {
+    loadEpisode(parseInt(e.target.value, 10));
+  };
+
+  $('csvFile').addEventListener('change', async (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+
+    try {
+      state.rows = parseCSV(await f.text());
+      state.episodes = [...new Set(state.rows.map(r => parseInt(r.episode || '0', 10)))].sort((a, b) => a - b);
+      if (!state.episodes.length) throw new Error('No episode values found.');
+      updateEpisodeList();
+      loadEpisode(state.episodes[0]);
+      statusEl.textContent = `Loaded ${state.rows.length} rows across ${state.episodes.length} episode(s).`;
+      statusEl.style.color = '#34d399';
+    } catch (err) {
+      statusEl.textContent = `Load error: ${err.message}`;
+      statusEl.style.color = '#f87171';
+    }
+  });
+
+  initHud();
+  state.timer = setInterval(tick, 200);
+})();
+</script>
+</body>
+</html>

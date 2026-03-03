@@ -415,6 +415,10 @@ class TurnHeadingControlTask(HeadingControlTask):
     DEFAULT_EPISODE_STEPS = 750
     ALLOWED_HEADINGS_DEG = (0.0, 90.0, -90.0)
     FIXED_INITIAL_HEADING_DEG = 0.0
+    ROLL_CAPTURE_HEADING_ERROR_DEG = 10.0
+    ROLL_TARGET_GAIN = 0.25
+    ROLL_TARGET_MAX_DEG = 35.0
+    ROLL_ERROR_SCALING_DEG = 8.0
 
     def __init__(self, shaping_type: Shaping, step_frequency_hz: float, aircraft: Aircraft,
                  episode_time_s: float = None, positive_rewards: bool = True):
@@ -438,6 +442,48 @@ class TurnHeadingControlTask(HeadingControlTask):
         if not choices:
             choices = list(self.ALLOWED_HEADINGS_DEG)
         return random.choice(choices)
+
+    def _select_assessor(self, base_components: Tuple[rewards.RewardComponent, ...],
+                         shaping_components: Tuple[rewards.RewardComponent, ...],
+                         shaping: Shaping) -> assessors.AssessorImpl:
+        if shaping is Shaping.STANDARD:
+            return assessors.AssessorImpl(base_components, shaping_components,
+                                          positive_rewards=self.positive_rewards)
+
+        wings_level = rewards.AsymptoticErrorComponent(name='wings_level',
+                                                       prop=prp.roll_rad,
+                                                       state_variables=self.state_variables,
+                                                       target=0.0,
+                                                       is_potential_based=True,
+                                                       scaling_factor=self.ROLL_ERROR_SCALING_RAD)
+        no_sideslip = rewards.AsymptoticErrorComponent(name='no_sideslip',
+                                                       prop=prp.sideslip_deg,
+                                                       state_variables=self.state_variables,
+                                                       target=0.0,
+                                                       is_potential_based=True,
+                                                       scaling_factor=self.SIDESLIP_ERROR_SCALING_DEG)
+        roll_target_tracking = rewards.TurnRollTrackingRewardComponent(
+            name='turn_roll_tracking',
+            roll_prop=prp.roll_rad,
+            track_error_prop=self.track_error_deg,
+            state_variables=self.state_variables,
+            is_potential_based=True,
+            capture_heading_error_deg=self.ROLL_CAPTURE_HEADING_ERROR_DEG,
+            roll_target_gain=self.ROLL_TARGET_GAIN,
+            max_target_roll_deg=self.ROLL_TARGET_MAX_DEG,
+            roll_error_scaling_deg=self.ROLL_ERROR_SCALING_DEG,
+        )
+        potential_based_components = (wings_level, no_sideslip, roll_target_tracking)
+
+        if shaping is Shaping.EXTRA:
+            return assessors.AssessorImpl(base_components, potential_based_components,
+                                          positive_rewards=self.positive_rewards)
+        elif shaping is Shaping.EXTRA_SEQUENTIAL:
+            altitude_error, travel_direction = base_components
+            dependency_map = {wings_level: (travel_direction,)}
+            return assessors.ContinuousSequentialAssessor(base_components, potential_based_components,
+                                                          potential_dependency_map=dependency_map,
+                                                          positive_rewards=self.positive_rewards)
 
     def get_initial_conditions(self) -> [Dict[Property, float]]:
         initial_conditions = super().get_initial_conditions()
