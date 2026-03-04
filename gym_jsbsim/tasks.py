@@ -142,9 +142,13 @@ class FlightTask(Task, ABC):
 
         self._update_custom_properties(sim)
         state = self.State(*(sim[prop] for prop in self.state_variables))
-        done = self._is_terminal(sim)
-        reward = self.assessor.assess(state, self.last_state, done)
+        # First assess transition as non-terminal so termination checks can use
+        # current-step quality instead of stale previous-step stored reward.
+        reward = self.assessor.assess(state, self.last_state, False)
+        done = self._is_terminal(sim, reward)
         if done:
+            # Recompute with terminal=True for potential-based components.
+            reward = self.assessor.assess(state, self.last_state, True)
             reward = self._reward_terminal_override(reward, sim)
         if self.debug:
             self._validate_state(state, done, action, reward)
@@ -173,7 +177,7 @@ class FlightTask(Task, ABC):
         pass
 
     @abstractmethod
-    def _is_terminal(self, sim: Simulation) -> bool:
+    def _is_terminal(self, sim: Simulation, reward: rewards.Reward = None) -> bool:
         """ Determines whether the current episode should terminate.
 
         :param sim: the current simulation
@@ -242,7 +246,7 @@ class HeadingControlTask(FlightTask):
     TRACK_ERROR_SCALING_DEG = 8
     ROLL_ERROR_SCALING_RAD = 0.15  # approx. 8 deg
     SIDESLIP_ERROR_SCALING_DEG = 3.
-    MIN_STATE_QUALITY = 0.0  # terminate if state 'quality' is less than this
+    MIN_STATE_QUALITY = 0.05  # terminate if positive-reward state quality is too poor
     MAX_ALTITUDE_DEVIATION_FT = 1000  # terminate if altitude error exceeds this
     target_track_deg = BoundedProperty('target/track-deg', 'desired heading [deg]',
                                        prp.heading_deg.min, prp.heading_deg.max)
@@ -362,11 +366,14 @@ class HeadingControlTask(FlightTask):
     def _decrement_steps_left(self, sim: Simulation):
         sim[self.steps_left] -= 1
 
-    def _is_terminal(self, sim: Simulation) -> bool:
+    def _is_terminal(self, sim: Simulation, reward: rewards.Reward = None) -> bool:
         # terminate when time >= max, but use math.isclose() for float equality test
         terminal_step = sim[self.steps_left] <= 0
-        state_quality = sim[self.last_assessment_reward]
-        state_out_of_bounds = state_quality < self.MIN_STATE_QUALITY  # TODO: issues if sequential?
+        state_quality = reward.assessment_reward() if reward is not None else sim[self.last_assessment_reward]
+        if self.positive_rewards:
+            state_out_of_bounds = state_quality <= self.MIN_STATE_QUALITY
+        else:
+            state_out_of_bounds = state_quality < 0.0
         return terminal_step or state_out_of_bounds or self._altitude_out_of_bounds(sim)
 
     def _altitude_out_of_bounds(self, sim: Simulation) -> bool:
@@ -412,13 +419,14 @@ class TurnHeadingControlTask(HeadingControlTask):
     A task in which the agent must make a turn from a random initial heading,
     and fly level to a random target heading.
     """
-    DEFAULT_EPISODE_STEPS = 750
+    DEFAULT_EPISODE_STEPS = 2000
     ALLOWED_HEADINGS_DEG = (0.0, 90.0, -90.0)
     FIXED_INITIAL_HEADING_DEG = 0.0
-    ROLL_CAPTURE_HEADING_ERROR_DEG = 10.0
+    ROLL_CAPTURE_HEADING_ERROR_DEG = 15.0
     ROLL_TARGET_GAIN = 0.25
-    ROLL_TARGET_MAX_DEG = 35.0
+    ROLL_TARGET_MAX_DEG = 90.0
     ROLL_ERROR_SCALING_DEG = 8.0
+    ROLL_RATE_SCALING_DEG_S = 12.0
 
     def __init__(self, shaping_type: Shaping, step_frequency_hz: float, aircraft: Aircraft,
                  episode_time_s: float = None, positive_rewards: bool = True):
@@ -473,6 +481,8 @@ class TurnHeadingControlTask(HeadingControlTask):
             roll_target_gain=self.ROLL_TARGET_GAIN,
             max_target_roll_deg=self.ROLL_TARGET_MAX_DEG,
             roll_error_scaling_deg=self.ROLL_ERROR_SCALING_DEG,
+            roll_rate_prop=prp.p_radps,
+            roll_rate_scaling_deg_s=self.ROLL_RATE_SCALING_DEG_S,
         )
         self.roll_target_tracking_component = roll_target_tracking
         potential_based_components = (wings_level, no_sideslip, roll_target_tracking)

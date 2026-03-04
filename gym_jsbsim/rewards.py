@@ -270,7 +270,9 @@ class TurnRollTrackingRewardComponent(RewardComponent):
                  capture_heading_error_deg: float,
                  roll_target_gain: float,
                  max_target_roll_deg: float,
-                 roll_error_scaling_deg: float):
+                 roll_error_scaling_deg: float,
+                 roll_rate_prop: prp.BoundedProperty = None,
+                 roll_rate_scaling_deg_s: float = 20.0):
         self.name = name
         self.potential_difference_based = is_potential_based
         self.roll_index = state_variables.index(roll_prop)
@@ -279,6 +281,8 @@ class TurnRollTrackingRewardComponent(RewardComponent):
         self.roll_target_gain = roll_target_gain
         self.max_target_roll_deg = max_target_roll_deg
         self.roll_error_scaling_deg = roll_error_scaling_deg
+        self.roll_rate_index = state_variables.index(roll_rate_prop) if roll_rate_prop is not None else None
+        self.roll_rate_scaling_deg_s = roll_rate_scaling_deg_s
 
     def get_name(self) -> str:
         return self.name
@@ -288,20 +292,21 @@ class TurnRollTrackingRewardComponent(RewardComponent):
 
     def _target_roll_deg(self, track_error_deg: float) -> float:
         # track_error is (current - target), so desired turn sign is opposite.
-        unclipped_target = -self.roll_target_gain * track_error_deg
+        unclipped_target = -self.roll_target_gain * float(track_error_deg)
         clipped_target = float(max(-self.max_target_roll_deg, min(self.max_target_roll_deg, unclipped_target)))
 
-        # Smoothly fade roll target to zero near heading capture band, instead of
-        # hard switching to 0 at threshold.
+        # Smoothly fade target roll to zero near heading capture, avoiding a hard
+        # transition that can excite roll oscillation.
         abs_error = abs(track_error_deg)
         if abs_error >= self.capture_heading_error_deg:
             return clipped_target
         if self.capture_heading_error_deg <= 0:
             return clipped_target
 
-        # Linear blend factor in [0,1]: 0 at zero heading error, 1 at capture band edge.
-        blend = abs_error / self.capture_heading_error_deg
-        return clipped_target * blend
+        # Use smoothstep instead of linear blend for gentler convergence as error -> 0.
+        x = abs_error / self.capture_heading_error_deg
+        smooth_blend = x * x * (3.0 - 2.0 * x)
+        return clipped_target * smooth_blend
 
     def get_target_roll_deg(self, track_error_deg: float) -> float:
         """Public helper for logging/inspection of the current target roll."""
@@ -315,7 +320,20 @@ class TurnRollTrackingRewardComponent(RewardComponent):
         track_error_deg = float(state[self.track_error_index])
         target_roll_deg = self._target_roll_deg(track_error_deg)
         roll_error_deg = abs(roll_deg - target_roll_deg)
-        return 1.0 - normalise_error_asymptotic(roll_error_deg, self.roll_error_scaling_deg)
+        roll_tracking_potential = 1.0 - normalise_error_asymptotic(roll_error_deg, self.roll_error_scaling_deg)
+
+        # Near heading-capture, increasingly reward roll stability (low roll rate)
+        # to suppress shaking while leveling wings.
+        if self.roll_rate_index is None or self.capture_heading_error_deg <= 0:
+            return roll_tracking_potential
+
+        roll_rate_deg_s = abs(math.degrees(float(state[self.roll_rate_index])))
+        stability_potential = 1.0 - normalise_error_asymptotic(roll_rate_deg_s, self.roll_rate_scaling_deg_s)
+
+        x = min(1.0, abs(track_error_deg) / self.capture_heading_error_deg)
+        smooth_blend = x * x * (3.0 - 2.0 * x)  # 1 far from capture, 0 at aligned heading
+        stability_weight = 1.0 - smooth_blend
+        return (1.0 - stability_weight) * roll_tracking_potential + stability_weight * stability_potential
 
     def calculate(self, state: State, prev_state: State, is_terminal: bool) -> float:
         if self.potential_difference_based:

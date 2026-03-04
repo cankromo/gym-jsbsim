@@ -28,7 +28,7 @@ class FlightTaskStub(FlightTask):
         self.action_variables = (prp.aileron_cmd, prp.elevator_cmd)
         super().__init__(AssessorStub())
 
-    def _is_terminal(self, _: Tuple[float, ...], __: float) -> bool:
+    def _is_terminal(self, _: Tuple[float, ...], __: float = None) -> bool:
         return False
 
     def get_initial_conditions(self):
@@ -70,7 +70,7 @@ class BasicFlightTask(FlightTask):
         self.action_variables = (prp.aileron_cmd, prp.rudder_cmd, prp.elevator_cmd)
         super().__init__(AssessorStub())
 
-    def _is_terminal(self, _: Simulation) -> bool:
+    def _is_terminal(self, _: Simulation, __: rewards.Reward = None) -> bool:
         return False
 
     def get_initial_conditions(self):

@@ -7,18 +7,18 @@
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
   <style>
     :root {
-      --bg-start: #030406;
-      --bg-end: #090b10;
-      --panel: rgba(13, 16, 23, 0.88);
-      --panel-solid: #0b1018;
-      --text: #e8edf7;
-      --muted: #91a0ba;
-      --accent: #22d3ee;
+      --bg-start: #05070d;
+      --bg-end: #0b1020;
+      --panel: rgba(14, 19, 33, 0.84);
+      --panel-solid: #0d1426;
+      --text: #edf3ff;
+      --muted: #9fb0cf;
+      --accent: #34d399;
       --accent-2: #f59e0b;
       --accent-3: #60a5fa;
-      --border: rgba(71, 85, 105, 0.55);
-      --shadow: 0 16px 38px rgba(0, 0, 0, 0.52);
-      --shadow-soft: 0 10px 24px rgba(0, 0, 0, 0.42);
+      --border: rgba(112, 132, 173, 0.34);
+      --shadow: 0 18px 42px rgba(2, 8, 23, 0.58);
+      --shadow-soft: 0 11px 28px rgba(2, 8, 23, 0.46);
     }
     * { box-sizing: border-box; }
     html, body {
@@ -26,14 +26,15 @@
       color: var(--text);
       font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
       background:
-        radial-gradient(900px 500px at 10% 10%, rgba(34, 211, 238, 0.12), transparent 58%),
-        radial-gradient(900px 520px at 88% -8%, rgba(245, 158, 11, 0.12), transparent 60%),
-        linear-gradient(180deg, var(--bg-start) 0%, var(--bg-end) 65%);
+        radial-gradient(950px 520px at 8% 6%, rgba(52, 211, 153, 0.12), transparent 60%),
+        radial-gradient(960px 540px at 92% -8%, rgba(245, 158, 11, 0.12), transparent 62%),
+        radial-gradient(780px 460px at 55% 120%, rgba(96, 165, 250, 0.12), transparent 62%),
+        linear-gradient(180deg, var(--bg-start) 0%, var(--bg-end) 68%);
     }
     .wrap {
       max-width: 1620px;
       margin: 0 auto;
-      padding: 14px;
+      padding: 16px;
     }
     .top, .timeline, .card, .hudpanel, .hudstats, .hudleft, .plot {
       backdrop-filter: blur(8px);
@@ -51,6 +52,7 @@
       position: sticky;
       top: 12px;
       z-index: 30;
+      animation: panelIn 420ms ease-out both;
     }
     .title {
       font-size: 20px;
@@ -115,6 +117,16 @@
       display: inline-flex;
       align-items: center;
       gap: 8px;
+      animation: panelIn 520ms ease-out both;
+    }
+    .status::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #fbbf24;
+      box-shadow: 0 0 10px rgba(251, 191, 36, 0.8);
+      animation: pulseDot 1.8s ease-in-out infinite;
     }
     .cards {
       margin-top: 12px;
@@ -128,6 +140,54 @@
       border-radius: 12px;
       box-shadow: var(--shadow-soft);
       padding: 10px;
+      transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+      animation: cardIn 520ms ease-out both;
+    }
+    .card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(52, 211, 153, 0.42);
+      box-shadow: 0 14px 30px rgba(8, 15, 35, 0.55);
+    }
+    .cards .card:nth-child(1) { animation-delay: 40ms; }
+    .cards .card:nth-child(2) { animation-delay: 80ms; }
+    .cards .card:nth-child(3) { animation-delay: 120ms; }
+    .cards .card:nth-child(4) { animation-delay: 160ms; }
+    .cards .card:nth-child(5) { animation-delay: 200ms; }
+    .cards .card:nth-child(6) { animation-delay: 240ms; }
+    .cards .card:nth-child(7) { animation-delay: 280ms; }
+    .cards .card:nth-child(8) { animation-delay: 320ms; }
+    .cards .card:nth-child(9) { animation-delay: 360ms; }
+    .cards .card:nth-child(10) { animation-delay: 400ms; }
+    .cards .card:nth-child(11) { animation-delay: 440ms; }
+    .cards .card:nth-child(12) { animation-delay: 480ms; }
+    .cards .card:nth-child(13) { animation-delay: 520ms; }
+    .cards .card:nth-child(14) { animation-delay: 560ms; }
+    .cards .card:nth-child(15) { animation-delay: 600ms; }
+    .cards .card:nth-child(16) { animation-delay: 640ms; }
+    .cards .card:nth-child(17) { animation-delay: 680ms; }
+    .cards .card:nth-child(18) { animation-delay: 720ms; }
+    .cards .card:nth-child(19) { animation-delay: 760ms; }
+    .cards .card:nth-child(20) { animation-delay: 800ms; }
+    .cards .card:nth-child(21) { animation-delay: 840ms; }
+    .cards .card:nth-child(22) { animation-delay: 880ms; }
+    .cards .card:nth-child(23) { animation-delay: 920ms; }
+    .cards .card:nth-child(24) { animation-delay: 960ms; }
+    .cards .card:nth-child(25) { animation-delay: 1000ms; }
+    .cards .card:nth-child(26) { animation-delay: 1040ms; }
+    .cards .card:nth-child(27) { animation-delay: 1080ms; }
+    .cards .card:nth-child(28) { animation-delay: 1120ms; }
+    .cards .card:nth-child(29) { animation-delay: 1160ms; }
+    .cards .card:nth-child(30) { animation-delay: 1200ms; }
+    .cards .card:nth-child(31) { animation-delay: 1240ms; }
+    .cards .card:nth-child(32) { animation-delay: 1280ms; }
+    .cards .card:nth-child(33) { animation-delay: 1320ms; }
+    .cards .card:nth-child(34) { animation-delay: 1360ms; }
+    .cards .card:nth-child(35) { animation-delay: 1400ms; }
+    .cards .card:nth-child(36) { animation-delay: 1440ms; }
+    .cards .card:nth-child(37) { animation-delay: 1480ms; }
+    .cards .card:nth-child(38) { animation-delay: 1520ms; }
+    .cards .card:nth-child(39) { animation-delay: 1560ms; }
+    .cards .card:nth-child(40) { animation-delay: 1600ms; }
     }
     .k {
       color: var(--muted);
@@ -155,6 +215,7 @@
       position: sticky;
       top: 92px;
       z-index: 25;
+      animation: panelIn 560ms ease-out both;
     }
     .timeline > div:first-child {
       color: var(--muted);
@@ -185,6 +246,7 @@
       border-radius: 12px;
       padding: 10px;
       box-shadow: var(--shadow-soft);
+      animation: panelIn 600ms ease-out both;
     }
     .hudtitle {
       color: var(--muted);
@@ -468,8 +530,33 @@
       border-radius: 12px;
       box-shadow: var(--shadow-soft);
       overflow: hidden;
+      transition: transform 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
+      animation: panelIn 660ms ease-out both;
+    }
+    .plot:hover {
+      transform: translateY(-2px);
+      border-color: rgba(96, 165, 250, 0.5);
+      box-shadow: 0 14px 34px rgba(2, 8, 23, 0.56);
     }
     .wide { grid-column: 1 / span 2; height: 460px; }
+    @keyframes panelIn {
+      from { opacity: 0; transform: translateY(10px) scale(0.994); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes cardIn {
+      from { opacity: 0; transform: translateY(9px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulseDot {
+      0%, 100% { transform: scale(1); opacity: 0.9; }
+      50% { transform: scale(1.22); opacity: 0.55; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        animation: none !important;
+        transition: none !important;
+      }
+    }
     @media (max-width: 1200px) {
       .top { grid-template-columns: 1fr 1fr; }
     }
@@ -815,12 +902,33 @@
 
     const commonLayout = {
       template: 'plotly_dark',
-      paper_bgcolor: '#111a2d',
-      plot_bgcolor: '#111a2d',
-      font: { color: '#dbeafe' },
-      margin: { l: 45, r: 16, t: 42, b: 40 },
+      paper_bgcolor: 'rgba(0,0,0,0)',
+      plot_bgcolor: '#0f1728',
+      font: { color: '#dbeafe', family: 'IBM Plex Sans, Segoe UI, sans-serif' },
+      margin: { l: 52, r: 18, t: 48, b: 44 },
       showlegend: true,
-      legend: { orientation: 'h', y: 1.12 }
+      legend: {
+        orientation: 'h',
+        y: 1.14,
+        bgcolor: 'rgba(0,0,0,0)',
+        font: { size: 11 }
+      },
+      hovermode: 'x unified',
+      hoverlabel: {
+        bgcolor: 'rgba(15, 23, 42, 0.96)',
+        bordercolor: '#334155',
+        font: { color: '#e2e8f0' }
+      },
+      xaxis: {
+        gridcolor: 'rgba(100, 116, 139, 0.28)',
+        zeroline: false,
+        linecolor: 'rgba(100, 116, 139, 0.45)'
+      },
+      yaxis: {
+        gridcolor: 'rgba(100, 116, 139, 0.28)',
+        zeroline: false,
+        linecolor: 'rgba(100, 116, 139, 0.45)'
+      }
     };
 
     Plotly.newPlot('plot_traj', [
@@ -833,7 +941,7 @@
       title: 'North-East Trajectory',
       xaxis: { title: 'East displacement (m)' },
       yaxis: { title: 'North displacement (m)', scaleanchor: 'x', scaleratio: 1 }
-    }, { responsive: true, displaylogo: false });
+    }, { responsive: true, displaylogo: false, modeBarButtonsToRemove: ['lasso2d', 'select2d'] });
 
     Plotly.newPlot('plot_geo3d', [
       {
@@ -876,15 +984,15 @@
       ...commonLayout,
       title: '3D Geodetic Trajectory (Lon / Lat / Alt)',
       scene: {
-        bgcolor: '#111a2d',
-        xaxis: { title: 'Longitude (deg)', showbackground: true, backgroundcolor: '#0f172a' },
-        yaxis: { title: 'Latitude (deg)', showbackground: true, backgroundcolor: '#0f172a' },
-        zaxis: { title: 'Altitude (ft)', showbackground: true, backgroundcolor: '#0f172a' },
+        bgcolor: '#0f1728',
+        xaxis: { title: 'Longitude (deg)', showbackground: true, backgroundcolor: '#0b1220', gridcolor: 'rgba(100,116,139,0.28)' },
+        yaxis: { title: 'Latitude (deg)', showbackground: true, backgroundcolor: '#0b1220', gridcolor: 'rgba(100,116,139,0.28)' },
+        zaxis: { title: 'Altitude (ft)', showbackground: true, backgroundcolor: '#0b1220', gridcolor: 'rgba(100,116,139,0.28)' },
         aspectmode: 'manual',
         aspectratio: { x: 1.35, y: 1.0, z: 0.6 },
         camera: { eye: { x: 1.55, y: -1.4, z: 0.95 } }
       }
-    }, { responsive: true, displaylogo: false });
+    }, { responsive: true, displaylogo: false, modeBarButtonsToRemove: ['lasso2d', 'select2d'] });
 
     Plotly.newPlot('plot_alt', [
       { x: a.step, y: g.alt, mode: 'lines', name: 'Altitude (ft)', line: { color: '#f59e0b', width: 2.8 } },
@@ -894,7 +1002,7 @@
       title: 'Altitude',
       xaxis: { title: 'Step' },
       yaxis: { title: 'Feet' }
-    }, { responsive: true, displaylogo: false });
+    }, { responsive: true, displaylogo: false, modeBarButtonsToRemove: ['lasso2d', 'select2d'] });
 
     Plotly.newPlot('plot_att', [
       { x: a.step, y: a.roll, mode: 'lines', name: 'Roll (deg)', line: { color: '#06b6d4' } },
@@ -907,7 +1015,7 @@
       title: 'Attitude',
       xaxis: { title: 'Step' },
       yaxis: { title: 'Degrees' }
-    }, { responsive: true, displaylogo: false });
+    }, { responsive: true, displaylogo: false, modeBarButtonsToRemove: ['lasso2d', 'select2d'] });
 
     Plotly.newPlot('plot_roll_metrics', [
       { x: a.step, y: a.currentRoll, mode: 'lines', name: 'Current Roll (deg)', line: { color: '#22d3ee', width: 2.5 } },
@@ -918,7 +1026,7 @@
       title: 'Roll Metrics vs Time',
       xaxis: { title: 'Step' },
       yaxis: { title: 'Degrees' }
-    }, { responsive: true, displaylogo: false });
+    }, { responsive: true, displaylogo: false, modeBarButtonsToRemove: ['lasso2d', 'select2d'] });
 
     Plotly.newPlot('plot_hdg', [
       { x: a.step, y: a.hdg, mode: 'lines', name: 'Heading', line: { color: '#22c55e' } },
@@ -929,7 +1037,7 @@
       title: 'Heading / Target / Error',
       xaxis: { title: 'Step' },
       yaxis: { title: 'Degrees' }
-    }, { responsive: true, displaylogo: false });
+    }, { responsive: true, displaylogo: false, modeBarButtonsToRemove: ['lasso2d', 'select2d'] });
 
     Plotly.newPlot('plot_reward', [
       { x: a.step, y: a.reward, mode: 'lines', name: 'Reward', line: { color: '#38bdf8' } }
@@ -938,7 +1046,7 @@
       title: 'Reward',
       xaxis: { title: 'Step' },
       yaxis: { title: 'Reward' }
-    }, { responsive: true, displaylogo: false });
+    }, { responsive: true, displaylogo: false, modeBarButtonsToRemove: ['lasso2d', 'select2d'] });
 
     Plotly.newPlot('plot_rates', [
       { x: a.step, y: a.vn, mode: 'lines', name: 'V North (fps)', line: { color: '#22d3ee' } },
@@ -949,7 +1057,7 @@
       title: 'Velocity Components',
       xaxis: { title: 'Step' },
       yaxis: { title: 'fps' }
-    }, { responsive: true, displaylogo: false });
+    }, { responsive: true, displaylogo: false, modeBarButtonsToRemove: ['lasso2d', 'select2d'] });
 
     slider.min = 0;
     slider.max = String(Math.max(0, epRows.length - 1));

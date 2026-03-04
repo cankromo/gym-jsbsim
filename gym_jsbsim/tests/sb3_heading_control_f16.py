@@ -56,9 +56,6 @@ class PeriodicTurnHeadingControlTask(tasks.TurnHeadingControlTask):
         return random.choice(choices)
 
 
-TASK_MAP["turn"] = PeriodicTurnHeadingControlTask
-
-
 def _apply_jsbsim_runtime_compat() -> None:
     """
     Runtime compatibility patching for newer JSBSim releases.
@@ -328,6 +325,8 @@ def _parse_args():
     parser.add_argument("--agent-freq", type=int, default=5)
     parser.add_argument("--shaping", type=str, default=tasks.Shaping.EXTRA_SEQUENTIAL.name)
     parser.add_argument("--task", type=str, default="turn", choices=sorted(TASK_MAP.keys()))
+    parser.add_argument("--periodic-targets", action="store_true",
+                        help="Use periodic 45-degree target headings for turn task.")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--print-every", type=int, default=25)
     parser.add_argument("--deterministic", action="store_true")
@@ -346,6 +345,8 @@ def main():
     args = _parse_args()
     shaping = _parse_shaping(args.shaping)
     task_type = TASK_MAP[args.task]
+    if args.task == "turn" and args.periodic_targets:
+        task_type = PeriodicTurnHeadingControlTask
 
     if args.mode == "train":
         train_heading_control_f16(
