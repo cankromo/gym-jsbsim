@@ -423,7 +423,9 @@ class TurnHeadingControlTask(HeadingControlTask):
     ALLOWED_HEADINGS_DEG = (0.0, 90.0, -90.0)
     FIXED_INITIAL_HEADING_DEG = 0.0
     ROLL_CAPTURE_HEADING_ERROR_DEG = 10.0
-    ROLL_TARGET_GAIN = 0.25
+    TURN_RESPONSE_TIME_S = 6.0
+    MAX_TURN_RATE_DEG_S = 20.0
+    MIN_TURN_SPEED_MPS = 35.0
     ROLL_TARGET_MAX_DEG = 90.0
     ROLL_ERROR_SCALING_DEG = 8.0
     ROLL_ERROR_SCALING_RAD = math.radians(ROLL_ERROR_SCALING_DEG)
@@ -506,20 +508,38 @@ class TurnHeadingControlTask(HeadingControlTask):
                                                           potential_dependency_map=dependency_map,
                                                           positive_rewards=self.positive_rewards)
 
-    def get_target_roll_deg(self, track_error_deg: float) -> float:
-        return self._compute_target_roll_deg(track_error_deg)
+    def get_target_roll_deg(self, track_error_deg: float, speed_mps: float = None) -> float:
+        return self._compute_target_roll_deg(track_error_deg, speed_mps)
 
-    def _compute_target_roll_deg(self, track_error_deg: float) -> float:
+    def _compute_target_roll_deg(self, track_error_deg: float, speed_mps: float = None) -> float:
         # Phase 2: once near heading capture, command wings-level flight.
         if abs(track_error_deg) < self.ROLL_CAPTURE_HEADING_ERROR_DEG:
             return 0.0
-        # Phase 1: dynamic turn tracking roll target.
-        unclipped_target = -self.ROLL_TARGET_GAIN * float(track_error_deg)
-        return float(max(-self.ROLL_TARGET_MAX_DEG, min(self.ROLL_TARGET_MAX_DEG, unclipped_target)))
+
+        # Phase 1: physics-based roll command for coordinated turn.
+        # track_error is (current - target), so heading error is opposite sign.
+        heading_error_deg = -float(track_error_deg)
+        yaw_rate_cmd_deg_s = heading_error_deg / self.TURN_RESPONSE_TIME_S
+        yaw_rate_cmd_deg_s = float(
+            max(-self.MAX_TURN_RATE_DEG_S, min(self.MAX_TURN_RATE_DEG_S, yaw_rate_cmd_deg_s))
+        )
+
+        if speed_mps is None:
+            speed_mps = self.aircraft.get_cruise_speed_fps() * 0.3048
+        speed_mps = max(self.MIN_TURN_SPEED_MPS, float(speed_mps))
+
+        g = 9.80665
+        yaw_rate_cmd_rad_s = math.radians(yaw_rate_cmd_deg_s)
+        target_roll_rad = math.atan((speed_mps * yaw_rate_cmd_rad_s) / g)
+        target_roll_deg = math.degrees(target_roll_rad)
+        return float(max(-self.ROLL_TARGET_MAX_DEG, min(self.ROLL_TARGET_MAX_DEG, target_roll_deg)))
 
     def _update_target_roll(self, sim: Simulation) -> None:
         track_error_deg = float(sim[self.track_error_deg])
-        target_roll_deg = self._compute_target_roll_deg(track_error_deg)
+        v_north_mps = float(sim[prp.v_north_fps]) * 0.3048
+        v_east_mps = float(sim[prp.v_east_fps]) * 0.3048
+        speed_mps = math.hypot(v_north_mps, v_east_mps)
+        target_roll_deg = self._compute_target_roll_deg(track_error_deg, speed_mps)
         sim[self.target_roll_rad] = math.radians(target_roll_deg)
 
     def _update_custom_properties(self, sim: Simulation) -> None:
