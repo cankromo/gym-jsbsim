@@ -28,6 +28,89 @@ TASK_MAP = {
 }
 
 
+def _unwrap_env(env_obj):
+    cur = env_obj
+    seen = set()
+    while id(cur) not in seen:
+        seen.add(id(cur))
+        nxt = getattr(cur, "env", None)
+        if nxt is None:
+            break
+        cur = nxt
+    return cur
+
+
+class TrainMetricsCallback:
+    """
+    Lightweight SB3 callback-like object for streaming custom training metrics.
+    Implemented without strict inheritance to keep dependencies minimal.
+    """
+    def __init__(self, vec_env, log_every_steps: int = 500):
+        from stable_baselines3.common.callbacks import BaseCallback
+
+        class _Impl(BaseCallback):
+            def __init__(self, parent, verbose=0):
+                super().__init__(verbose=verbose)
+                self.parent = parent
+                self.log_every_steps = log_every_steps
+                self.prev_abs_track_error = None
+                self.step_count = 0
+                self.sign_ok_count = 0
+                self.sign_total = 0
+
+            def _on_step(self) -> bool:
+                self.step_count += 1
+                base_env = self.parent.base_env
+                sim = getattr(base_env, "sim", None)
+                if sim is None:
+                    return True
+
+                track_err = float(sim[base_env.task.track_error_deg])
+                heading_deg = float(sim[prp.heading_deg])
+                target_heading_deg = float(sim[base_env.task.target_track_deg])
+                roll_deg = math.degrees(float(sim[prp.roll_rad]))
+                target_roll_deg = float(base_env.task.get_target_roll_deg(track_err))
+                roll_error_deg = roll_deg - target_roll_deg
+                abs_track_err = abs(track_err)
+
+                # For current convention, desired turn sign should be opposite track error sign.
+                # sign_ok = target_roll * track_error <= 0
+                if abs(track_err) > 1e-6 and abs(target_roll_deg) > 1e-6:
+                    self.sign_total += 1
+                    if (target_roll_deg * track_err) <= 0.0:
+                        self.sign_ok_count += 1
+
+                if self.prev_abs_track_error is None:
+                    track_err_delta = 0.0
+                else:
+                    track_err_delta = self.prev_abs_track_error - abs_track_err
+                self.prev_abs_track_error = abs_track_err
+
+                self.logger.record("custom/track_error_deg_abs", abs_track_err)
+                self.logger.record("custom/roll_error_deg_abs", abs(roll_error_deg))
+                self.logger.record("custom/target_roll_deg_abs", abs(target_roll_deg))
+                self.logger.record("custom/track_error_improvement", track_err_delta)
+                if self.sign_total > 0:
+                    self.logger.record("custom/target_roll_sign_ok_rate", self.sign_ok_count / self.sign_total)
+
+                if self.step_count % self.log_every_steps == 0:
+                    sign_rate = (self.sign_ok_count / self.sign_total) if self.sign_total > 0 else float("nan")
+                    print(
+                        f"[train-metrics] step={self.step_count} "
+                        f"| hdg={heading_deg:.2f} deg "
+                        f"| tgt_hdg={target_heading_deg:.2f} deg "
+                        f"| |track_err|={abs_track_err:.2f} deg "
+                        f"| |roll_err|={abs(roll_error_deg):.2f} deg "
+                        f"| |target_roll|={abs(target_roll_deg):.2f} deg "
+                        f"| d|track_err|={track_err_delta:.3f} "
+                        f"| sign_ok_rate={sign_rate:.3f}"
+                    )
+                return True
+
+        self.base_env = _unwrap_env(vec_env.envs[0])
+        self.impl = _Impl(self)
+
+
 class EvalRandomTargetTurnHeadingControlTask(tasks.TurnHeadingControlTask):
     """Eval-only task variant: keep task dynamics, but sample random target heading."""
 
@@ -37,18 +120,20 @@ class EvalRandomTargetTurnHeadingControlTask(tasks.TurnHeadingControlTask):
 
 class PeriodicTurnHeadingControlTask(tasks.TurnHeadingControlTask):
     """
-    Turn task with fixed cyclic target headings (non-random).
+    Turn task with list-based random target headings (non-cyclic).
     """
 
     ALLOWED_HEADINGS_DEG = (0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 325.0)
 
-    def __init__(self, *args, **kwargs):
-        self._cycle_idx = -1
-        super().__init__(*args, **kwargs)
-
     def _get_target_track(self) -> float:
-        self._cycle_idx = (self._cycle_idx + 1) % len(self.ALLOWED_HEADINGS_DEG)
-        return float(self.ALLOWED_HEADINGS_DEG[self._cycle_idx])
+        # Sample from configured list each episode while avoiding no-turn targets
+        # and immediate repetition.
+        choices = [h for h in self.ALLOWED_HEADINGS_DEG if h != self._current_initial_heading]
+        if self._last_target_heading is not None:
+            choices = [h for h in choices if h != self._last_target_heading]
+        if not choices:
+            choices = [h for h in self.ALLOWED_HEADINGS_DEG if h != self._current_initial_heading]
+        return float(random.choice(choices))
 
 
 def _apply_jsbsim_runtime_compat() -> None:
@@ -165,7 +250,8 @@ def train_heading_control_f16(
         learning_rate=3e-4,
         clip_range=0.2,
     )
-    model.learn(total_timesteps=total_timesteps)
+    metrics_cb = TrainMetricsCallback(vec_env, log_every_steps=500).impl
+    model.learn(total_timesteps=total_timesteps, callback=metrics_cb)
     model.save(os.path.join(model_dir, "ppo_heading_control_f16"))
     vec_env.save(os.path.join(model_dir, "vecnormalize.pkl"))
     vec_env.close()
