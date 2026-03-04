@@ -37,23 +37,18 @@ class EvalRandomTargetTurnHeadingControlTask(tasks.TurnHeadingControlTask):
 
 class PeriodicTurnHeadingControlTask(tasks.TurnHeadingControlTask):
     """
-    Turn task with periodic 45-degree targets in [0, 360] notation.
-    Excludes headings equivalent to initial heading (0 deg), including 360.
+    Turn task with fixed cyclic target headings (non-random).
     """
 
-    ALLOWED_HEADINGS_DEG = (0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0, 360.0)
+    ALLOWED_HEADINGS_DEG = (0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 325.0)
 
-    @staticmethod
-    def _norm_heading(hdg: float) -> float:
-        # Canonicalize to [0, 360) so 0 and 360 are treated as identical.
-        return float(hdg) % 360.0
+    def __init__(self, *args, **kwargs):
+        self._cycle_idx = -1
+        super().__init__(*args, **kwargs)
 
-    def _sample_discrete_heading(self, *forbidden) -> float:
-        forbidden_norm = {self._norm_heading(h) for h in forbidden if h is not None}
-        choices = [h for h in self.ALLOWED_HEADINGS_DEG if self._norm_heading(h) not in forbidden_norm]
-        if not choices:
-            choices = list(self.ALLOWED_HEADINGS_DEG)
-        return random.choice(choices)
+    def _get_target_track(self) -> float:
+        self._cycle_idx = (self._cycle_idx + 1) % len(self.ALLOWED_HEADINGS_DEG)
+        return float(self.ALLOWED_HEADINGS_DEG[self._cycle_idx])
 
 
 def _apply_jsbsim_runtime_compat() -> None:
