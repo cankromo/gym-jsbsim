@@ -423,10 +423,9 @@ class TurnHeadingControlTask(HeadingControlTask):
     ALLOWED_HEADINGS_DEG = (0.0, 90.0, -90.0)
     FIXED_INITIAL_HEADING_DEG = 0.0
     ROLL_CAPTURE_HEADING_ERROR_DEG = 10.0
-    TURN_RESPONSE_TIME_S = 6.0
-    MAX_TURN_RATE_DEG_S = 20.0
-    MIN_TURN_SPEED_MPS = 35.0
+    PHASE2_ROLL_STABILITY_BONUS = 8.0
     ROLL_TARGET_MAX_DEG = 90.0
+    HEADING_ERROR_SCALING_DEG = 60.0
     ROLL_ERROR_SCALING_DEG = 8.0
     ROLL_ERROR_SCALING_RAD = math.radians(ROLL_ERROR_SCALING_DEG)
     target_roll_rad = BoundedProperty(
@@ -471,6 +470,49 @@ class TurnHeadingControlTask(HeadingControlTask):
             choices = list(self.ALLOWED_HEADINGS_DEG)
         return random.choice(choices)
 
+    def task_step(self, sim: Simulation, action: Sequence[float], sim_steps: int) \
+            -> Tuple[NamedTuple, float, bool, Dict]:
+        # input actions
+        for prop, command in zip(self.action_variables, action):
+            sim[prop] = command
+
+        # run simulation
+        for _ in range(sim_steps):
+            sim.run()
+
+        self._update_custom_properties(sim)
+        state = self.State(*(sim[prop] for prop in self.state_variables))
+        reward = self.assessor.assess(state, self.last_state, False)
+        done = self._is_terminal(sim, reward)
+        if done:
+            reward = self.assessor.assess(state, self.last_state, True)
+            reward = self._reward_terminal_override(reward, sim)
+
+        reward = self._apply_phase2_roll_stability_bonus(reward, sim)
+
+        if self.debug:
+            self._validate_state(state, done, action, reward)
+        self._store_reward(reward, sim)
+        self.last_state = state
+        info = {'reward': reward}
+        return state, reward.agent_reward(), done, info
+
+    def _apply_phase2_roll_stability_bonus(self, reward: rewards.Reward, sim: Simulation) -> rewards.Reward:
+        """
+        When heading is captured, heavily reward wings-level stabilization.
+        This bonus is shaping-only (agent_reward), assessment_reward is unchanged.
+        """
+        track_error_deg = abs(float(sim[self.track_error_deg]))
+        if track_error_deg >= self.ROLL_CAPTURE_HEADING_ERROR_DEG:
+            return reward
+
+        roll_abs_rad = abs(float(sim[prp.roll_rad]))
+        roll_stability = 1.0 - rewards.normalise_error_asymptotic(
+            roll_abs_rad, self.ROLL_ERROR_SCALING_RAD
+        )
+        bonus = self.PHASE2_ROLL_STABILITY_BONUS * roll_stability
+        return RewardStub(float(reward.agent_reward() + bonus), float(reward.assessment_reward()))
+
     def _select_assessor(self, base_components: Tuple[rewards.RewardComponent, ...],
                          shaping_components: Tuple[rewards.RewardComponent, ...],
                          shaping: Shaping) -> assessors.AssessorImpl:
@@ -508,38 +550,23 @@ class TurnHeadingControlTask(HeadingControlTask):
                                                           potential_dependency_map=dependency_map,
                                                           positive_rewards=self.positive_rewards)
 
-    def get_target_roll_deg(self, track_error_deg: float, speed_mps: float = None) -> float:
-        return self._compute_target_roll_deg(track_error_deg, speed_mps)
+    def get_target_roll_deg(self, track_error_deg: float) -> float:
+        return self._compute_target_roll_deg(track_error_deg)
 
-    def _compute_target_roll_deg(self, track_error_deg: float, speed_mps: float = None) -> float:
+    def _compute_target_roll_deg(self, track_error_deg: float) -> float:
         # Phase 2: once near heading capture, command wings-level flight.
         if abs(track_error_deg) < self.ROLL_CAPTURE_HEADING_ERROR_DEG:
             return 0.0
 
-        # Phase 1: physics-based roll command for coordinated turn.
-        # track_error is (current - target), so heading error is opposite sign.
-        heading_error_deg = -float(track_error_deg)
-        yaw_rate_cmd_deg_s = heading_error_deg / self.TURN_RESPONSE_TIME_S
-        yaw_rate_cmd_deg_s = float(
-            max(-self.MAX_TURN_RATE_DEG_S, min(self.MAX_TURN_RATE_DEG_S, yaw_rate_cmd_deg_s))
-        )
-
-        if speed_mps is None:
-            speed_mps = self.aircraft.get_cruise_speed_fps() * 0.3048
-        speed_mps = max(self.MIN_TURN_SPEED_MPS, float(speed_mps))
-
-        g = 9.80665
-        yaw_rate_cmd_rad_s = math.radians(yaw_rate_cmd_deg_s)
-        target_roll_rad = math.atan((speed_mps * yaw_rate_cmd_rad_s) / g)
-        target_roll_deg = math.degrees(target_roll_rad)
+        # Phase 1: simple smooth mapping from heading error to target roll.
+        # track_error is (current - target), so desired roll sign is opposite.
+        scaled_error = float(track_error_deg) / self.HEADING_ERROR_SCALING_DEG
+        target_roll_deg = -self.ROLL_TARGET_MAX_DEG * math.tanh(scaled_error)
         return float(max(-self.ROLL_TARGET_MAX_DEG, min(self.ROLL_TARGET_MAX_DEG, target_roll_deg)))
 
     def _update_target_roll(self, sim: Simulation) -> None:
         track_error_deg = float(sim[self.track_error_deg])
-        v_north_mps = float(sim[prp.v_north_fps]) * 0.3048
-        v_east_mps = float(sim[prp.v_east_fps]) * 0.3048
-        speed_mps = math.hypot(v_north_mps, v_east_mps)
-        target_roll_deg = self._compute_target_roll_deg(track_error_deg, speed_mps)
+        target_roll_deg = self._compute_target_roll_deg(track_error_deg)
         sim[self.target_roll_rad] = math.radians(target_roll_deg)
 
     def _update_custom_properties(self, sim: Simulation) -> None:
