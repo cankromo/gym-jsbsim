@@ -442,13 +442,6 @@ class TurnHeadingControlTask(HeadingControlTask):
         self._last_initial_heading = None
         self._last_target_heading = None
         self._current_initial_heading = None
-        self.extra_state_variables = (
-            self.altitude_error_ft,
-            prp.sideslip_deg,
-            self.track_error_deg,
-            self.target_roll_rad,
-            self.steps_left,
-        )
         super().__init__(
             shaping_type=shaping_type,
             step_frequency_hz=step_frequency_hz,
@@ -456,6 +449,18 @@ class TurnHeadingControlTask(HeadingControlTask):
             episode_time_s=episode_time_s,
             positive_rewards=positive_rewards,
         )
+        # Extend turn-task state with dynamic roll target after HeadingControlTask
+        # has created steps_left.
+        self.extra_state_variables = (
+            self.altitude_error_ft,
+            prp.sideslip_deg,
+            self.track_error_deg,
+            self.target_roll_rad,
+            self.steps_left,
+        )
+        self.state_variables = FlightTask.base_state_variables + self.extra_state_variables
+        self._make_state_class()
+        self.assessor = self.make_assessor(shaping_type)
 
     def _sample_discrete_heading(self, *forbidden) -> float:
         forbidden_set = {h for h in forbidden if h is not None}
@@ -471,11 +476,15 @@ class TurnHeadingControlTask(HeadingControlTask):
             return assessors.AssessorImpl(base_components, shaping_components,
                                           positive_rewards=self.positive_rewards)
 
+        # During base-class init, state may not yet include target_roll_rad.
+        # In that pass, fall back to wings-level target=0.0; after Turn init
+        # completes we rebuild assessor with dynamic target_roll_rad in state.
+        dynamic_roll_target_available = self.target_roll_rad in self.state_variables
         roll_target_tracking = rewards.AsymptoticErrorComponent(
             name='turn_roll_tracking',
             prop=prp.roll_rad,
             state_variables=self.state_variables,
-            target=self.target_roll_rad,
+            target=self.target_roll_rad if dynamic_roll_target_available else 0.0,
             is_potential_based=True,
             scaling_factor=self.ROLL_ERROR_SCALING_RAD,
         )
