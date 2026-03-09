@@ -164,10 +164,15 @@
     .hud-wrap {
       margin-top: 12px;
       display: grid;
-      grid-template-columns: 1.35fr 0.85fr;
+      grid-template-columns: 1.2fr 1fr;
       gap: 10px;
     }
     .hudstack {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .radarstack {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 10px;
@@ -459,6 +464,7 @@
       .timeline { grid-template-columns: 1fr; top: 82px; }
       .hudstack { grid-template-columns: 1fr; }
       .hud-wrap { grid-template-columns: 1fr; }
+      .radarstack { grid-template-columns: 1fr; }
       .grid { grid-template-columns: 1fr; }
       .wide { grid-column: auto; }
     }
@@ -566,18 +572,34 @@
           </div>
         </div>
       </div>
-      <div class="radarpanel">
-        <div class="paneltitle">Formation Radar</div>
-        <div class="radar" id="radar">
-          <div class="sweep"></div>
-          <div class="radar-ring"></div>
-          <div class="radar-cross"></div>
-          <div class="blip a" id="blipA"></div>
-          <div class="blip b" id="blipB"></div>
+      <div class="radarstack">
+        <div class="radarpanel">
+          <div class="paneltitle">Radar A Perspective</div>
+          <div class="radar" id="radarA">
+            <div class="sweep"></div>
+            <div class="radar-ring"></div>
+            <div class="radar-cross"></div>
+            <div class="blip a" id="blipOwnA"></div>
+            <div class="blip b" id="blipTargetA"></div>
+          </div>
+          <div class="radarlegend">
+            <span><span class="dot" style="background:#1d4ed8"></span><span id="radarOwnLabelA">Own</span></span>
+            <span><span class="dot" style="background:#4ade80"></span><span id="radarTargetLabelA">Target</span></span>
+          </div>
         </div>
-        <div class="radarlegend">
-          <span><span class="dot" style="background:#1d4ed8"></span><span id="radarLabelA">A</span></span>
-          <span><span class="dot" style="background:#4ade80"></span><span id="radarLabelB">B</span></span>
+        <div class="radarpanel">
+          <div class="paneltitle">Radar B Perspective</div>
+          <div class="radar" id="radarB">
+            <div class="sweep"></div>
+            <div class="radar-ring"></div>
+            <div class="radar-cross"></div>
+            <div class="blip a" id="blipOwnB"></div>
+            <div class="blip b" id="blipTargetB"></div>
+          </div>
+          <div class="radarlegend">
+            <span><span class="dot" style="background:#1d4ed8"></span><span id="radarOwnLabelB">Own</span></span>
+            <span><span class="dot" style="background:#4ade80"></span><span id="radarTargetLabelB">Target</span></span>
+          </div>
         </div>
       </div>
     </div>
@@ -606,7 +628,7 @@
     idx: 0,
     playing: true,
     timer: null,
-    radarHitState: { A: null, B: null }
+    radarHitState: { A: null, B: null, C: null, D: null }
   };
 
   function toNum(v, d = 0) {
@@ -792,55 +814,70 @@
     $(`hudText${suffix}`).textContent = `ROLL ${roll.toFixed(1)} | PITCH ${pitch.toFixed(1)} | HDG ${heading.toFixed(1)}`;
   }
 
-  function updateRadar(idx) {
-    const radar = $('radar');
+  function updateRadarView(radarId, ownBlipId, targetBlipId, ownLabelId, targetLabelId, ownEntry, targetEntry, idx, hitKeyPrefix) {
+    const radar = $(radarId);
     const rect = radar.getBoundingClientRect();
     const radius = Math.min(rect.width, rect.height) * 0.40;
     const centerX = rect.width / 2;
     const centerY = rect.height / 2;
-    $('radarLabelA').textContent = state.aircraftEpisodeRows[0] ? state.aircraftEpisodeRows[0].label : 'A';
-    $('radarLabelB').textContent = state.aircraftEpisodeRows[1] ? state.aircraftEpisodeRows[1].label : 'B';
+    const ownBlip = $(ownBlipId);
+    const targetBlip = $(targetBlipId);
+    $(ownLabelId).textContent = ownEntry ? ownEntry.label : 'Own';
+    $(targetLabelId).textContent = targetEntry ? targetEntry.label : 'Target';
 
-    const points = state.aircraftEpisodeRows.map((entry) => {
-      const geo = geoSeries(entry.rows);
-      const i = clamp(idx, 0, geo.eastM.length - 1);
-      const row = currentRow(entry.rows, idx);
-      return {
-        x: geo.eastM[i],
-        y: geo.northM[i],
-        heading: col(row, ['attitude_psi_deg', 'heading_deg'], 0),
-      };
-    });
+    if (!ownEntry || !targetEntry) {
+      ownBlip.style.display = 'none';
+      targetBlip.style.display = 'none';
+      return;
+    }
 
-    if (!points.length) return;
-    const base = points[0];
-    const scale = Math.max(150, ...points.map((p) => Math.hypot(p.x - base.x, p.y - base.y)), 1);
+    const ownGeo = geoSeries(ownEntry.rows);
+    const targetGeo = geoSeries(targetEntry.rows);
+    const ownIndex = clamp(idx, 0, ownGeo.eastM.length - 1);
+    const targetIndex = clamp(idx, 0, targetGeo.eastM.length - 1);
+    const ownRow = currentRow(ownEntry.rows, idx);
+    const targetRow = currentRow(targetEntry.rows, idx);
+    const ownHeading = col(ownRow, ['attitude_psi_deg', 'heading_deg'], 0);
+    const targetHeading = col(targetRow, ['attitude_psi_deg', 'heading_deg'], 0);
 
-    [{id: 'blipA', point: points[0], key: 'A'}, {id: 'blipB', point: points[1], key: 'B'}].forEach(({id, point, key}) => {
-      const el = $(id);
-      if (!point) {
-        el.style.display = 'none';
-        return;
-      }
-      el.style.display = 'block';
-      const dx = (point.x - base.x) / scale;
-      const dy = (point.y - base.y) / scale;
-      el.style.left = `${centerX + dx * radius}px`;
-      el.style.top = `${centerY - dy * radius}px`;
-      el.style.setProperty('--heading', `${point.heading - 90}deg`);
+    ownBlip.style.display = 'block';
+    ownBlip.style.left = `${centerX}px`;
+    ownBlip.style.top = `${centerY}px`;
+    ownBlip.style.setProperty('--heading', `${ownHeading - 90}deg`);
 
-      const sweepAngleDeg = ((performance.now() / 4000) * 360) % 360;
-      const contactAngleDeg = ((Math.atan2(dx, dy) * 180 / Math.PI) + 360) % 360;
-      const deltaDeg = Math.abs((((sweepAngleDeg - contactAngleDeg) + 540) % 360) - 180);
-      const contactDist = Math.hypot(dx, dy);
-      const hitBucket = `${Math.round(sweepAngleDeg / 12)}:${Math.round(contactDist * 20)}`;
-      if (deltaDeg < 8 && state.radarHitState[key] !== hitBucket) {
-        state.radarHitState[key] = hitBucket;
-        el.classList.remove('hit');
-        void el.offsetWidth;
-        el.classList.add('hit');
-      }
-    });
+    const dxWorld = targetGeo.eastM[targetIndex] - ownGeo.eastM[ownIndex];
+    const dyWorld = targetGeo.northM[targetIndex] - ownGeo.northM[ownIndex];
+    const headingRad = ownHeading * Math.PI / 180.0;
+    const forward = dxWorld * Math.sin(headingRad) + dyWorld * Math.cos(headingRad);
+    const right = dxWorld * Math.cos(headingRad) - dyWorld * Math.sin(headingRad);
+    const range = Math.max(150, Math.hypot(dxWorld, dyWorld), 1);
+    const dx = right / range;
+    const dy = forward / range;
+
+    targetBlip.style.display = 'block';
+    targetBlip.style.left = `${centerX + dx * radius}px`;
+    targetBlip.style.top = `${centerY - dy * radius}px`;
+    targetBlip.style.setProperty('--heading', `${targetHeading - ownHeading - 90}deg`);
+
+    const sweepAngleDeg = ((performance.now() / 4000) * 360) % 360;
+    const contactAngleDeg = ((Math.atan2(dx, dy) * 180 / Math.PI) + 360) % 360;
+    const deltaDeg = Math.abs((((sweepAngleDeg - contactAngleDeg) + 540) % 360) - 180);
+    const contactDist = Math.hypot(dx, dy);
+    const hitBucket = `${Math.round(sweepAngleDeg / 12)}:${Math.round(contactDist * 20)}`;
+    const hitKey = `${hitKeyPrefix}`;
+    if (deltaDeg < 8 && state.radarHitState[hitKey] !== hitBucket) {
+      state.radarHitState[hitKey] = hitBucket;
+      targetBlip.classList.remove('hit');
+      void targetBlip.offsetWidth;
+      targetBlip.classList.add('hit');
+    }
+  }
+
+  function updateRadar(idx) {
+    const first = state.aircraftEpisodeRows[0];
+    const second = state.aircraftEpisodeRows[1];
+    updateRadarView('radarA', 'blipOwnA', 'blipTargetA', 'radarOwnLabelA', 'radarTargetLabelA', first, second, idx, 'A');
+    updateRadarView('radarB', 'blipOwnB', 'blipTargetB', 'radarOwnLabelB', 'radarTargetLabelB', second, first, idx, 'B');
   }
 
   function formatAircraftState(row) {
