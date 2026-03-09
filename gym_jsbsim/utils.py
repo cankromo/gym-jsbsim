@@ -1,4 +1,5 @@
 import functools
+import math
 import operator
 from typing import Tuple
 from gym_jsbsim.aircraft import cessna172P, a320, f15, f16
@@ -70,3 +71,20 @@ def reduce_reflex_angle_deg(angle: float) -> float:
     if new_angle > 180:
         new_angle -= 360
     return new_angle
+
+
+def offset_geodetic_position(latitude_deg: float,
+                             longitude_deg: float,
+                             north_m: float = 0.0,
+                             east_m: float = 0.0) -> Tuple[float, float]:
+    """
+    Applies a small local north/east offset to a geodetic position.
+
+    This uses an equirectangular approximation, which is sufficient for the
+    short formation offsets used by the shared-world multi-aircraft wrapper.
+    """
+    metres_per_deg_lat = 111_320.0
+    metres_per_deg_lon = max(1e-9, metres_per_deg_lat * math.cos(math.radians(latitude_deg)))
+    next_lat_deg = latitude_deg + (north_m / metres_per_deg_lat)
+    next_lon_deg = longitude_deg + (east_m / metres_per_deg_lon)
+    return next_lat_deg, next_lon_deg
