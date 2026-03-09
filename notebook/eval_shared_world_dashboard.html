@@ -415,6 +415,7 @@
     }
     .blip.a { color: #1d4ed8; background: #1d4ed8; box-shadow: 0 0 10px rgba(37, 99, 235, 0.85); }
     .blip.b { color: #4ade80; background: #4ade80; }
+    .blip.danger { color: #ef4444; background: #ef4444; box-shadow: 0 0 14px rgba(239, 68, 68, 0.95); }
     .blip.hit {
       animation: contactPulse 0.55s ease-out;
     }
@@ -618,6 +619,8 @@
   const COLORS = ['#22d3ee', '#f59e0b'];
   const DEFAULT_CSV_A = './test_plane_a_hud_visible.csv';
   const DEFAULT_CSV_B = './test_plane_b_hud_visible.csv';
+  const RADAR_DANGER_AZIMUTH_DEG = 60.0;
+  const RADAR_DANGER_RANGE_M = 1200.0;
   const $ = (id) => document.getElementById(id);
 
   const state = {
@@ -850,14 +853,19 @@
     const headingRad = ownHeading * Math.PI / 180.0;
     const forward = dxWorld * Math.sin(headingRad) + dyWorld * Math.cos(headingRad);
     const right = dxWorld * Math.cos(headingRad) - dyWorld * Math.sin(headingRad);
-    const range = Math.max(150, Math.hypot(dxWorld, dyWorld), 1);
+    const actualRange = Math.max(1, Math.hypot(dxWorld, dyWorld));
+    const range = Math.max(150, actualRange, 1);
     const dx = right / range;
     const dy = forward / range;
+    const bearingDeg = Math.atan2(right, Math.max(1.0, forward)) * 180.0 / Math.PI;
+    const inDanger = forward > 0 && Math.abs(bearingDeg) <= RADAR_DANGER_AZIMUTH_DEG && actualRange <= RADAR_DANGER_RANGE_M;
 
     targetBlip.style.display = 'block';
     targetBlip.style.left = `${centerX + dx * radius}px`;
     targetBlip.style.top = `${centerY - dy * radius}px`;
     targetBlip.style.setProperty('--heading', `${targetHeading - ownHeading - 90}deg`);
+    targetBlip.classList.toggle('danger', inDanger);
+    $(targetLabelId).textContent = inDanger ? `${targetEntry.label} - DANGER` : targetEntry.label;
 
     const sweepAngleDeg = ((performance.now() / 4000) * 360) % 360;
     const contactAngleDeg = ((Math.atan2(dx, dy) * 180 / Math.PI) + 360) % 360;

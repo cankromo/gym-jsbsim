@@ -144,12 +144,14 @@ class DogfightEnv:
     rewards. Existing single-aircraft envs remain untouched.
     """
 
-    FIRE_AZIMUTH_DEG = 30.0
+    FIRE_AZIMUTH_DEG = 60.0
     FIRE_ELEVATION_DEG = 20.0
     FIRE_SOLUTION_DEG = 6.0
     FIRE_RANGE_M = 1200.0
     OPTIMAL_RANGE_M = 800.0
     RANGE_SCALE_M = 4000.0
+    DEFENSIVE_CONE_WEIGHT = 0.20
+    DEFENSIVE_FIRE_SOLUTION_PENALTY = 0.60
 
     def __init__(self,
                  agent_interaction_freq: int = 5,
@@ -233,36 +235,62 @@ class DogfightEnv:
         ], dtype=np.float32)
         return np.concatenate([base_obs, extra], dtype=np.float32)
 
+    def _shot_quality(self, rel: RelativeGeometry) -> Dict[str, float | bool]:
+        aim_quality = max(0.0, 1.0 - abs(rel.bearing_error_deg) / self.FIRE_AZIMUTH_DEG)
+        elevation_quality = max(0.0, 1.0 - abs(rel.elevation_error_deg) / self.FIRE_ELEVATION_DEG)
+        range_quality = 1.0 / (1.0 + abs(rel.range_m - self.OPTIMAL_RANGE_M) / self.OPTIMAL_RANGE_M)
+        in_firing_cone = (
+            rel.forward_m > 0.0
+            and abs(rel.bearing_error_deg) <= self.FIRE_AZIMUTH_DEG
+            and abs(rel.elevation_error_deg) <= self.FIRE_ELEVATION_DEG
+            and rel.range_m <= self.FIRE_RANGE_M
+        )
+        fire_solution = (
+            in_firing_cone
+            and abs(rel.bearing_error_deg) <= self.FIRE_SOLUTION_DEG
+            and abs(rel.elevation_error_deg) <= self.FIRE_SOLUTION_DEG
+        )
+        return {
+            "aim_quality": aim_quality,
+            "elevation_quality": elevation_quality,
+            "range_quality": range_quality,
+            "in_firing_cone": in_firing_cone,
+            "fire_solution": fire_solution,
+        }
+
     def _reward_for(self, agent: str) -> tuple[float, Dict]:
         own_sim = self._sim(agent)
         opponent_sim = self._sim(self._opponent(agent))
         rel = compute_relative_geometry(own_sim, opponent_sim)
-        aim_quality = max(0.0, 1.0 - abs(rel.bearing_error_deg) / self.FIRE_AZIMUTH_DEG)
-        elevation_quality = max(0.0, 1.0 - abs(rel.elevation_error_deg) / self.FIRE_ELEVATION_DEG)
-        range_quality = 1.0 / (1.0 + abs(rel.range_m - self.OPTIMAL_RANGE_M) / self.OPTIMAL_RANGE_M)
+        threat_rel = compute_relative_geometry(opponent_sim, own_sim)
+        shot = self._shot_quality(rel)
+        threat = self._shot_quality(threat_rel)
         prev_range = self._previous_ranges.get(agent)
         closure_bonus = 0.0 if prev_range is None else max(-0.15, min(0.15, (prev_range - rel.range_m) / 250.0))
         self._previous_ranges[agent] = rel.range_m
-        fire_solution = (
-            rel.forward_m > 0.0
-            and abs(rel.bearing_error_deg) <= self.FIRE_SOLUTION_DEG
-            and abs(rel.elevation_error_deg) <= self.FIRE_SOLUTION_DEG
-            and rel.range_m <= self.FIRE_RANGE_M
+        defensive_penalty = (
+            self.DEFENSIVE_CONE_WEIGHT * float(threat["aim_quality"])
+            + (self.DEFENSIVE_FIRE_SOLUTION_PENALTY if threat["fire_solution"] else 0.0)
         )
         reward = (
-            0.45 * aim_quality
-            + 0.15 * elevation_quality
-            + 0.25 * range_quality
+            0.45 * float(shot["aim_quality"])
+            + 0.15 * float(shot["elevation_quality"])
+            + 0.25 * float(shot["range_quality"])
             + 0.15 * (closure_bonus + 0.15)
-            + (0.75 if fire_solution else 0.0)
+            + (0.75 if shot["fire_solution"] else 0.0)
+            - defensive_penalty
         )
         return float(reward), {
             "relative_geometry": rel,
-            "aim_quality": aim_quality,
-            "elevation_quality": elevation_quality,
-            "range_quality": range_quality,
+            "threat_relative_geometry": threat_rel,
+            "aim_quality": float(shot["aim_quality"]),
+            "elevation_quality": float(shot["elevation_quality"]),
+            "range_quality": float(shot["range_quality"]),
             "closure_bonus": closure_bonus,
-            "fire_solution": fire_solution,
+            "fire_solution": bool(shot["fire_solution"]),
+            "defensive_cone_penalty": self.DEFENSIVE_CONE_WEIGHT * float(threat["aim_quality"]),
+            "defensive_fire_solution": bool(threat["fire_solution"]),
+            "defensive_penalty": defensive_penalty,
         }
 
     def reset(self) -> Dict[str, np.ndarray]:

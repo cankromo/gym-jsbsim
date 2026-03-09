@@ -2,7 +2,7 @@ import math
 import unittest
 
 from gym_jsbsim import properties as prp
-from gym_jsbsim.dogfight import compute_relative_geometry, telemetry_fieldnames
+from gym_jsbsim.dogfight import DogfightEnv, compute_relative_geometry, telemetry_fieldnames
 
 
 class FakeSim(dict):
@@ -54,3 +54,22 @@ class TestTelemetryFieldnames(unittest.TestCase):
         self.assertEqual(names[:5], ["plane_id", "episode", "step", "reward", "done"])
         self.assertIn("range_m", names)
         self.assertIn("bearing_error_deg", names)
+
+
+class TestDogfightRewardHelpers(unittest.TestCase):
+    def test_shot_quality_detects_fire_solution_ahead(self):
+        env = DogfightEnv.__new__(DogfightEnv)
+        rel = compute_relative_geometry(
+            make_sim(51.3781, -2.3273, 5000, 0.0),
+            make_sim(51.3790, -2.3273, 5000, 0.0),
+        )
+        shot = env._shot_quality(rel)
+        self.assertTrue(shot["in_firing_cone"])
+        self.assertTrue(shot["fire_solution"])
+
+    def test_reverse_geometry_can_represent_defensive_threat(self):
+        env = DogfightEnv.__new__(DogfightEnv)
+        own = make_sim(51.3781, -2.3273, 5000, 0.0)
+        target = make_sim(51.3790, -2.3273, 5000, 0.0)
+        threat = env._shot_quality(compute_relative_geometry(target, own))
+        self.assertFalse(threat["fire_solution"])
