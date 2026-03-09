@@ -594,6 +594,8 @@
 <script>
 (() => {
   const COLORS = ['#22d3ee', '#f59e0b'];
+  const DEFAULT_CSV_A = './test_plane_a_hud_visible.csv';
+  const DEFAULT_CSV_B = './test_plane_b_hud_visible.csv';
   const $ = (id) => document.getElementById(id);
 
   const state = {
@@ -1128,6 +1130,27 @@
     }
   }
 
+  async function loadDefaultHostedCsvs() {
+    try {
+      const [respA, respB] = await Promise.all([
+        fetch(DEFAULT_CSV_A),
+        fetch(DEFAULT_CSV_B),
+      ]);
+      if (!respA.ok || !respB.ok) {
+        throw new Error(`default CSV fetch failed (${respA.status}, ${respB.status})`);
+      }
+      const [textA, textB] = await Promise.all([respA.text(), respB.text()]);
+      const rowsA = parseCSV(textA);
+      const rowsB = parseCSV(textB);
+      loadSeparateRows(rowsA, rowsB);
+      $('status').textContent = 'Loaded hosted demo CSVs automatically.';
+      $('status').style.color = '#34d399';
+    } catch (err) {
+      $('status').textContent = 'Default hosted CSVs were not found. Load one combined CSV or two aircraft CSVs.';
+      $('status').style.color = '#fbbf24';
+    }
+  }
+
   $('btnPlay').onclick = () => {
     state.playing = !state.playing;
     $('btnPlay').textContent = state.playing ? 'Pause' : 'Play';
@@ -1156,6 +1179,8 @@
     $('stepSlider').value = String(state.idx);
     setMetrics(state.idx);
   }, 200);
+
+  loadDefaultHostedCsvs();
 })();
 </script>
 </body>
