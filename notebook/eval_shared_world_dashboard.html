@@ -617,7 +617,7 @@
 <script>
 (() => {
   const COLORS = ['#22d3ee', '#f59e0b'];
-  const DEFAULT_RANDOM_COMBINED_CSV = '../models/eval_outputs/random_dogfight_eval.csv';
+  const DEFAULT_RANDOM_COMBINED_CSV = '../models/eval_outputs/dogfight_duel_eval.csv';
   const DEFAULT_CSV_A = './test_plane_a_hud_visible.csv';
   const DEFAULT_CSV_B = './test_plane_b_hud_visible.csv';
   const RADAR_DANGER_AZIMUTH_DEG = 60.0;
@@ -1183,7 +1183,7 @@
         const combinedText = await combinedResp.text();
         const combinedRows = parseCSV(combinedText);
         loadCombinedRows(combinedRows);
-        $('status').textContent = 'Loaded default combined dogfight CSV automatically.';
+        $('status').textContent = 'Loaded default duel evaluation CSV automatically.';
         $('status').style.color = '#34d399';
         return;
       }
