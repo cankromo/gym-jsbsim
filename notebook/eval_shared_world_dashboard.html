@@ -120,6 +120,12 @@
     }
     .card {
       padding: 10px;
+      transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+    }
+    .card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(96, 165, 250, 0.48);
+      box-shadow: 0 14px 32px rgba(2, 8, 23, 0.42);
     }
     .k {
       color: var(--muted);
@@ -212,6 +218,7 @@
       height: 496px;
       transform-origin: 50% 50%;
       background: linear-gradient(to bottom, #1d4ed8 0 50%, #9a3412 50% 100%);
+      transition: transform 120ms linear;
     }
     .hline {
       position: absolute;
@@ -257,6 +264,7 @@
       display: none;
       box-shadow: 0 0 10px rgba(248, 250, 252, 0.7);
       background: rgba(255, 255, 255, 0.08);
+      transition: left 110ms linear, top 110ms linear, opacity 120ms ease;
     }
     .traffic-marker::before,
     .traffic-marker::after {
@@ -298,6 +306,7 @@
       border-bottom: 12px solid #facc15;
       transform: translateX(-50%);
       z-index: 6;
+      transition: transform 120ms linear;
     }
     .heading-tape {
       position: absolute;
@@ -315,6 +324,7 @@
       letter-spacing: 0.45px;
       z-index: 6;
       font-variant-numeric: tabular-nums;
+      transition: opacity 120ms ease;
     }
     .hudreadout {
       margin-top: 8px;
@@ -400,6 +410,7 @@
       transform: translate(-50%, -50%);
       box-shadow: 0 0 10px currentColor;
       opacity: 0.9;
+      transition: left 110ms linear, top 110ms linear, color 120ms ease, background 120ms ease, box-shadow 120ms ease;
     }
     .blip::after {
       content: "";
@@ -622,6 +633,7 @@
   const DEFAULT_CSV_B = './test_plane_b_hud_visible.csv';
   const RADAR_DANGER_AZIMUTH_DEG = 60.0;
   const RADAR_DANGER_RANGE_M = 1200.0;
+  const PLAYBACK_FRAME_MS = 200.0;
   const $ = (id) => document.getElementById(id);
 
   const state = {
@@ -630,8 +642,10 @@
     episodes: [],
     aircraftEpisodeRows: [],
     idx: 0,
+    framePos: 0,
     playing: true,
     timer: null,
+    lastTickMs: null,
     radarHitState: { A: null, B: null, C: null, D: null }
   };
 
@@ -737,30 +751,62 @@
     return rows[clamp(idx, 0, rows.length - 1)];
   }
 
-  function relativeState(entry, idx) {
+  function interpolatedRow(rows, framePos) {
+    if (!rows.length) return {};
+    const lo = clamp(Math.floor(framePos), 0, rows.length - 1);
+    const hi = clamp(lo + 1, 0, rows.length - 1);
+    const alpha = clamp(framePos - lo, 0, 1);
+    if (lo === hi) return rows[lo];
+
+    const base = rows[lo];
+    const next = rows[hi];
+    const out = {};
+    const keys = new Set([...Object.keys(base), ...Object.keys(next)]);
+    keys.forEach((key) => {
+      const aRaw = base[key];
+      const bRaw = next[key];
+      const a = Number(aRaw);
+      const b = Number(bRaw);
+      if (Number.isFinite(a) && Number.isFinite(b)) {
+        out[key] = String(a + (b - a) * alpha);
+      } else {
+        out[key] = alpha < 0.5 ? (aRaw ?? bRaw) : (bRaw ?? aRaw);
+      }
+    });
+    return out;
+  }
+
+  function interpolatedPoint(series, framePos) {
+    if (!series.length) return 0;
+    const lo = clamp(Math.floor(framePos), 0, series.length - 1);
+    const hi = clamp(lo + 1, 0, series.length - 1);
+    const alpha = clamp(framePos - lo, 0, 1);
+    return series[lo] + (series[hi] - series[lo]) * alpha;
+  }
+
+  function relativeState(entry, framePos) {
     if (!entry || !entry.rows.length) {
       return null;
     }
     const geo = geoSeries(entry.rows);
-    const i = clamp(idx, 0, geo.eastM.length - 1);
-    const row = currentRow(entry.rows, idx);
+    const row = interpolatedRow(entry.rows, framePos);
     return {
-      eastM: geo.eastM[i],
-      northM: geo.northM[i],
-      altM: geo.altFt[i] * 0.3048,
+      eastM: interpolatedPoint(geo.eastM, framePos),
+      northM: interpolatedPoint(geo.northM, framePos),
+      altM: interpolatedPoint(geo.altFt, framePos) * 0.3048,
       headingDeg: col(row, ['attitude_psi_deg', 'heading_deg'], 0),
       pitchDeg: col(row, ['pitch_deg'], 0),
       rollDeg: col(row, ['roll_deg'], 0),
     };
   }
 
-  function updateTrafficMarker(ownEntry, otherEntry, idx, suffix, labelText) {
+  function updateTrafficMarker(ownEntry, otherEntry, framePos, suffix, labelText) {
     const marker = $(`trafficMarker${suffix}`);
     const label = $(`trafficLabel${suffix}`);
     label.textContent = labelText;
 
-    const own = relativeState(ownEntry, idx);
-    const other = relativeState(otherEntry, idx);
+    const own = relativeState(ownEntry, framePos);
+    const other = relativeState(otherEntry, framePos);
     if (!own || !other) {
       marker.style.display = 'none';
       return;
@@ -818,7 +864,7 @@
     $(`hudText${suffix}`).textContent = `ROLL ${roll.toFixed(1)} | PITCH ${pitch.toFixed(1)} | HDG ${heading.toFixed(1)}`;
   }
 
-  function updateRadarView(radarId, ownBlipId, targetBlipId, ownLabelId, targetLabelId, ownEntry, targetEntry, idx, hitKeyPrefix) {
+  function updateRadarView(radarId, ownBlipId, targetBlipId, ownLabelId, targetLabelId, ownEntry, targetEntry, framePos, hitKeyPrefix) {
     const radar = $(radarId);
     const rect = radar.getBoundingClientRect();
     const radius = Math.min(rect.width, rect.height) * 0.40;
@@ -837,10 +883,8 @@
 
     const ownGeo = geoSeries(ownEntry.rows);
     const targetGeo = geoSeries(targetEntry.rows);
-    const ownIndex = clamp(idx, 0, ownGeo.eastM.length - 1);
-    const targetIndex = clamp(idx, 0, targetGeo.eastM.length - 1);
-    const ownRow = currentRow(ownEntry.rows, idx);
-    const targetRow = currentRow(targetEntry.rows, idx);
+    const ownRow = interpolatedRow(ownEntry.rows, framePos);
+    const targetRow = interpolatedRow(targetEntry.rows, framePos);
     const ownHeading = col(ownRow, ['attitude_psi_deg', 'heading_deg'], 0);
     const targetHeading = col(targetRow, ['attitude_psi_deg', 'heading_deg'], 0);
 
@@ -849,8 +893,8 @@
     ownBlip.style.top = `${centerY}px`;
     ownBlip.style.setProperty('--heading', `${ownHeading - 90}deg`);
 
-    const dxWorld = targetGeo.eastM[targetIndex] - ownGeo.eastM[ownIndex];
-    const dyWorld = targetGeo.northM[targetIndex] - ownGeo.northM[ownIndex];
+    const dxWorld = interpolatedPoint(targetGeo.eastM, framePos) - interpolatedPoint(ownGeo.eastM, framePos);
+    const dyWorld = interpolatedPoint(targetGeo.northM, framePos) - interpolatedPoint(ownGeo.northM, framePos);
     const headingRad = ownHeading * Math.PI / 180.0;
     const forward = dxWorld * Math.sin(headingRad) + dyWorld * Math.cos(headingRad);
     const right = dxWorld * Math.cos(headingRad) - dyWorld * Math.sin(headingRad);
@@ -882,11 +926,11 @@
     }
   }
 
-  function updateRadar(idx) {
+  function updateRadar(framePos) {
     const first = state.aircraftEpisodeRows[0];
     const second = state.aircraftEpisodeRows[1];
-    updateRadarView('radarA', 'blipOwnA', 'blipTargetA', 'radarOwnLabelA', 'radarTargetLabelA', first, second, idx, 'A');
-    updateRadarView('radarB', 'blipOwnB', 'blipTargetB', 'radarOwnLabelB', 'radarTargetLabelB', second, first, idx, 'B');
+    updateRadarView('radarA', 'blipOwnA', 'blipTargetA', 'radarOwnLabelA', 'radarTargetLabelA', first, second, framePos, 'A');
+    updateRadarView('radarB', 'blipOwnB', 'blipTargetB', 'radarOwnLabelB', 'radarTargetLabelB', second, first, framePos, 'B');
   }
 
   function formatAircraftState(row) {
@@ -897,15 +941,13 @@
     return `${col(row, ['error_track_error_deg'], 0).toFixed(2)} deg / ${col(row, ['roll_deg'], 0).toFixed(2)} deg`;
   }
 
-  function formationGapMeters(rowsA, rowsB, idx) {
+  function formationGapMeters(rowsA, rowsB, framePos) {
     if (!rowsA.length || !rowsB.length) return 0;
     const geoA = geoSeries(rowsA);
     const geoB = geoSeries(rowsB);
-    const iA = clamp(idx, 0, geoA.eastM.length - 1);
-    const iB = clamp(idx, 0, geoB.eastM.length - 1);
-    const dx = geoA.eastM[iA] - geoB.eastM[iB];
-    const dy = geoA.northM[iA] - geoB.northM[iB];
-    const dz = (geoA.altFt[iA] - geoB.altFt[iB]) * 0.3048;
+    const dx = interpolatedPoint(geoA.eastM, framePos) - interpolatedPoint(geoB.eastM, framePos);
+    const dy = interpolatedPoint(geoA.northM, framePos) - interpolatedPoint(geoB.northM, framePos);
+    const dz = (interpolatedPoint(geoA.altFt, framePos) - interpolatedPoint(geoB.altFt, framePos)) * 0.3048;
     return Math.hypot(dx, dy, dz);
   }
 
@@ -1054,7 +1096,7 @@
     return state.aircraftEpisodeRows.reduce((m, entry) => Math.max(m, entry.rows.length), 0);
   }
 
-  function updateLiveMarkers(idx) {
+  function updateLiveMarkers(framePos) {
     const trajX = [];
     const trajY = [];
     const geoX = [];
@@ -1063,12 +1105,11 @@
 
     state.aircraftEpisodeRows.forEach((entry) => {
       const geo = geoSeries(entry.rows);
-      const i = clamp(idx, 0, geo.eastM.length - 1);
-      trajX.push([geo.eastM[i]]);
-      trajY.push([geo.northM[i]]);
-      geoX.push([geo.lonDeg[i]]);
-      geoY.push([geo.latDeg[i]]);
-      geoZ.push([geo.altFt[i]]);
+      trajX.push([interpolatedPoint(geo.eastM, framePos)]);
+      trajY.push([interpolatedPoint(geo.northM, framePos)]);
+      geoX.push([interpolatedPoint(geo.lonDeg, framePos)]);
+      geoY.push([interpolatedPoint(geo.latDeg, framePos)]);
+      geoZ.push([interpolatedPoint(geo.altFt, framePos)]);
     });
 
     const trajIndices = state.aircraftEpisodeRows.map((_, i) => i * 2 + 1);
@@ -1077,27 +1118,28 @@
     Plotly.restyle('plot_geo3d', { x: geoX, y: geoY, z: geoZ }, geoIndices);
   }
 
-  function setMetrics(idx) {
+  function setMetrics(framePos) {
     const first = state.aircraftEpisodeRows[0] || { label: '-', rows: [] };
     const second = state.aircraftEpisodeRows[1] || { label: '-', rows: [] };
-    const rowA = currentRow(first.rows, idx);
-    const rowB = currentRow(second.rows, idx);
+    const rowA = interpolatedRow(first.rows, framePos);
+    const rowB = interpolatedRow(second.rows, framePos);
+    const stepIndex = Math.floor(framePos);
 
     $('m_a_name').textContent = first.label;
     $('m_b_name').textContent = second.label;
-    $('m_step').textContent = String(col(rowA, ['step'], idx));
-    $('m_gap').textContent = formationGapMeters(first.rows, second.rows, idx).toFixed(1);
+    $('m_step').textContent = String(col(rowA, ['step'], stepIndex));
+    $('m_gap').textContent = formationGapMeters(first.rows, second.rows, framePos).toFixed(1);
     $('m_a_state').textContent = formatAircraftState(rowA);
     $('m_b_state').textContent = second.rows.length ? formatAircraftState(rowB) : '-';
     $('m_a_turn').textContent = formatTurnState(rowA);
     $('m_b_turn').textContent = second.rows.length ? formatTurnState(rowB) : '-';
-    $('stepLabel').textContent = `${idx} / ${Math.max(0, maxLength() - 1)}`;
+    $('stepLabel').textContent = `${stepIndex} / ${Math.max(0, maxLength() - 1)}`;
     updateHud(rowA, first.label, 'A');
     updateHud(rowB, second.label || '-', 'B');
-    updateTrafficMarker(first, second, idx, 'A', second.label || 'B');
-    updateTrafficMarker(second, first, idx, 'B', first.label || 'A');
-    updateRadar(idx);
-    updateLiveMarkers(idx);
+    updateTrafficMarker(first, second, framePos, 'A', second.label || 'B');
+    updateTrafficMarker(second, first, framePos, 'B', first.label || 'A');
+    updateRadar(framePos);
+    updateLiveMarkers(framePos);
   }
 
   function loadEpisode(ep) {
@@ -1107,6 +1149,8 @@
     })).filter(entry => entry.rows.length > 0);
 
     state.idx = 0;
+    state.framePos = 0;
+    state.lastTickMs = null;
     if (!state.aircraftEpisodeRows.length) {
       $('status').textContent = `Episode ${ep} has no rows.`;
       $('status').style.color = '#f87171';
@@ -1214,7 +1258,9 @@
 
   $('stepSlider').oninput = (e) => {
     state.idx = parseInt(e.target.value, 10) || 0;
-    setMetrics(state.idx);
+    state.framePos = state.idx;
+    state.lastTickMs = null;
+    setMetrics(state.framePos);
   };
 
   $('episodeSel').onchange = (e) => {
@@ -1229,12 +1275,23 @@
   $('csvA').addEventListener('change', handleSeparateFiles);
   $('csvB').addEventListener('change', handleSeparateFiles);
 
-  state.timer = setInterval(() => {
-    if (!state.playing || !state.aircraftEpisodeRows.length) return;
-    state.idx = Math.min(state.idx + 1, Math.max(0, maxLength() - 1));
-    $('stepSlider').value = String(state.idx);
-    setMetrics(state.idx);
-  }, 200);
+  function tick(nowMs) {
+    if (state.playing && state.aircraftEpisodeRows.length) {
+      if (state.lastTickMs == null) state.lastTickMs = nowMs;
+      const maxFrame = Math.max(0, maxLength() - 1);
+      const deltaMs = nowMs - state.lastTickMs;
+      state.lastTickMs = nowMs;
+      state.framePos = Math.min(maxFrame, state.framePos + (deltaMs / PLAYBACK_FRAME_MS));
+      state.idx = Math.floor(state.framePos);
+      $('stepSlider').value = String(state.idx);
+      setMetrics(state.framePos);
+    } else {
+      state.lastTickMs = nowMs;
+    }
+    state.timer = requestAnimationFrame(tick);
+  }
+
+  state.timer = requestAnimationFrame(tick);
 
   loadDefaultHostedCsvs();
 })();
