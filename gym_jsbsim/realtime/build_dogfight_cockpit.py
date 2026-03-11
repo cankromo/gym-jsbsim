@@ -794,7 +794,7 @@ def _html_with_data(data_json: str, dt_sec: float) -> str:
       let cx = 0;
       let cy = 0;
       let visible = isFinite(bearing) && isFinite(elevation) && range < 8000;
-      if (rendererMode === "three") {
+      if (rendererMode === "three" && targetJet && camera) {
         const projected = targetJet.position.clone().project(camera);
         visible = visible && projected.z > -1 && projected.z < 1;
         if (visible) {
@@ -829,7 +829,7 @@ def _html_with_data(data_json: str, dt_sec: float) -> str:
     }
 
     function updateScene(s, i) {
-      if (rendererMode !== "three") {
+      if (rendererMode !== "three" || !camera || !targetJet || !targetWorld || !sky || !horizonRing || !ground || !contrail) {
         return;
       }
       const altitudeM = s.alt_ft[i] * 0.3048;
