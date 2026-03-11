@@ -8,6 +8,7 @@ import pandas as pd
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CSV = REPO_ROOT / "models" / "eval_outputs" / "dogfight_cycle_eval.csv"
 DEFAULT_HTML = REPO_ROOT / "models" / "eval_outputs" / "dogfight_cockpit_player.html"
+DEFAULT_MERGED_TEMPLATE = REPO_ROOT / "models" / "eval_outputs" / "dogfight_cockpit_merged.html"
 FIRE_AZIMUTH_DEG = 60.0
 FIRE_ELEVATION_DEG = 20.0
 FIRE_SOLUTION_DEG = 6.0
@@ -19,6 +20,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--output-html", type=str, default=str(DEFAULT_HTML))
     parser.add_argument("--dt-sec", type=float, default=0.2)
     parser.add_argument("--stride", type=int, default=1)
+    parser.add_argument("--template", choices=("standard", "merged"), default="standard")
     return parser.parse_args()
 
 
@@ -1009,6 +1011,28 @@ def _html_with_data(data_json: str, dt_sec: float) -> str:
     )
 
 
+def _html_from_merged_template(data_json: str, dt_sec: float) -> str:
+    template_path = DEFAULT_MERGED_TEMPLATE
+    if not template_path.exists():
+        raise FileNotFoundError(f"Merged template not found: {template_path}")
+
+    text = template_path.read_text(encoding="utf-8")
+
+    data_start = text.index("    const DATA = ")
+    data_end = text.index("\n    const DT_SEC =", data_start)
+    dt_start = data_end + 1
+    dt_end = text.index("\n", dt_start)
+
+    text = (
+        text[:data_start]
+        + f"    const DATA = {data_json};"
+        + text[data_end:dt_start]
+        + f"    const DT_SEC = {json.dumps(dt_sec)};"
+        + text[dt_end:]
+    )
+    return text
+
+
 def main() -> None:
     args = _parse_args()
     csv_path = Path(args.csv_path).expanduser().resolve()
@@ -1017,7 +1041,11 @@ def main() -> None:
 
     df = pd.read_csv(csv_path)
     payload = _build_payload(df, stride=args.stride)
-    html = _html_with_data(json.dumps(payload, separators=(",", ":")), args.dt_sec)
+    data_json = json.dumps(payload, separators=(",", ":"))
+    if args.template == "merged":
+        html = _html_from_merged_template(data_json, args.dt_sec)
+    else:
+        html = _html_with_data(data_json, args.dt_sec)
     output_html.write_text(html, encoding="utf-8")
     print(f"Saved HTML: {output_html}")
 
