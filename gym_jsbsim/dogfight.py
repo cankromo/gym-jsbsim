@@ -152,13 +152,21 @@ class DogfightEnv:
     RANGE_SCALE_M = 4000.0
     DEFENSIVE_CONE_WEIGHT = 0.20
     DEFENSIVE_FIRE_SOLUTION_PENALTY = 0.60
+    DEFAULT_SPAWN_SEPARATION_M = 900.0
+    DEFAULT_ALTITUDE_SEPARATION_FT = 200.0
 
     def __init__(self,
                  agent_interaction_freq: int = 5,
                  shaping: Shaping = Shaping.EXTRA_SEQUENTIAL,
-                 aircraft_type=aircraft.f16):
+                 aircraft_type=aircraft.f16,
+                 spawn_separation_m: float = DEFAULT_SPAWN_SEPARATION_M,
+                 altitude_separation_ft: float = DEFAULT_ALTITUDE_SEPARATION_FT,
+                 spawn_seed: Optional[int] = None):
         apply_jsbsim_runtime_compat()
         self.agent_order = ("plane_a", "plane_b")
+        self.spawn_separation_m = float(max(200.0, spawn_separation_m))
+        self.altitude_separation_ft = float(max(0.0, altitude_separation_ft))
+        self._spawn_rng = np.random.default_rng(spawn_seed)
         self.world = SharedWorldJsbSimEnv(
             members=(
                 FormationMember(
@@ -166,16 +174,16 @@ class DogfightEnv:
                     task_type=PursuitDogfightTask,
                     aircraft=aircraft_type,
                     shaping=shaping,
-                    east_offset_m=0.0,
-                    altitude_offset_ft=0.0,
+                    east_offset_m=-0.5 * self.spawn_separation_m,
+                    altitude_offset_ft=-0.5 * self.altitude_separation_ft,
                 ),
                 FormationMember(
                     name="plane_b",
                     task_type=PursuitDogfightTask,
                     aircraft=aircraft_type,
                     shaping=shaping,
-                    east_offset_m=450.0,
-                    altitude_offset_ft=250.0,
+                    east_offset_m=0.5 * self.spawn_separation_m,
+                    altitude_offset_ft=0.5 * self.altitude_separation_ft,
                 ),
             ),
             agent_interaction_freq=agent_interaction_freq,
@@ -189,6 +197,20 @@ class DogfightEnv:
             for agent in self.agent_order
         }
         self._previous_ranges: Dict[str, float] = {}
+
+    def _randomize_spawn_offsets(self) -> None:
+        half_sep = 0.5 * self.spawn_separation_m
+        bearing_rad = float(self._spawn_rng.uniform(0.0, 2.0 * math.pi))
+        north_offset = math.cos(bearing_rad) * half_sep
+        east_offset = math.sin(bearing_rad) * half_sep
+        altitude_offset = 0.5 * self.altitude_separation_ft
+        member_a, member_b = self.world.members
+        member_a.north_offset_m = -north_offset
+        member_a.east_offset_m = -east_offset
+        member_a.altitude_offset_ft = -altitude_offset
+        member_b.north_offset_m = north_offset
+        member_b.east_offset_m = east_offset
+        member_b.altitude_offset_ft = altitude_offset
 
     def close(self):
         self.world.close()
@@ -294,6 +316,7 @@ class DogfightEnv:
         }
 
     def reset(self) -> Dict[str, np.ndarray]:
+        self._randomize_spawn_offsets()
         self.world.reset()
         self._update_dynamic_targets()
         self._previous_ranges = {}
