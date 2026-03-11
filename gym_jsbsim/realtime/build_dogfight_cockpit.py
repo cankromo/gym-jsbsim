@@ -120,7 +120,7 @@ def _html_with_data(data_json: str, dt_sec: float) -> str:
     }
     #topbar {
       display: grid;
-      grid-template-columns: 1fr auto auto auto auto auto;
+      grid-template-columns: 1fr auto auto auto auto auto auto;
       gap: 10px;
       align-items: center;
       padding: 12px;
@@ -149,10 +149,14 @@ def _html_with_data(data_json: str, dt_sec: float) -> str:
       border-radius: 10px;
       border: 1px solid rgba(96, 124, 168, 0.5);
     }
-    select, button {
+    select, button, input[type="file"] {
       background: #0a1321;
       color: var(--text);
       padding: 8px 10px;
+    }
+    input[type="file"] {
+      max-width: 220px;
+      font-size: 12px;
     }
     button {
       cursor: pointer;
@@ -308,6 +312,21 @@ def _html_with_data(data_json: str, dt_sec: float) -> str:
       color: var(--danger);
       display: none;
     }
+    #miniJet {
+      position: absolute;
+      left: 50%;
+      bottom: 110px;
+      width: 110px;
+      height: 56px;
+      transform: translateX(-50%);
+      opacity: 0.85;
+      filter: drop-shadow(0 0 14px rgba(125, 249, 255, 0.12));
+    }
+    #miniJet svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
     #timelineBar {
       display: grid;
       grid-template-columns: auto 1fr auto;
@@ -367,6 +386,10 @@ def _html_with_data(data_json: str, dt_sec: float) -> str:
         </select>
       </div>
       <div class="ctrl">
+        <label for="fileInput">CSV Load</label>
+        <input id="fileInput" type="file" accept=".csv,text/csv" />
+      </div>
+      <div class="ctrl">
         <label>&nbsp;</label>
         <button id="btnPlay">Pause</button>
       </div>
@@ -388,6 +411,16 @@ def _html_with_data(data_json: str, dt_sec: float) -> str:
         <div id="targetLabel">TARGET</div>
         <div id="fireCue">FIRE CUE</div>
         <div id="warningCue">THREAT</div>
+        <div id="miniJet" aria-hidden="true">
+          <svg viewBox="0 0 220 110" xmlns="http://www.w3.org/2000/svg">
+            <g fill="none" stroke="#7df9ff" stroke-width="4" stroke-linejoin="round">
+              <path d="M20 55 L84 48 L130 16 L144 18 L122 49 L164 55 L122 61 L144 92 L130 94 L84 62 L20 55 Z" fill="rgba(125,249,255,0.08)"/>
+              <path d="M68 55 L182 55"/>
+              <path d="M96 40 L96 70"/>
+              <path d="M52 45 L76 55 L52 65"/>
+            </g>
+          </svg>
+        </div>
       </div>
     </div>
     <div id="timelineBar" class="panel">
@@ -398,7 +431,7 @@ def _html_with_data(data_json: str, dt_sec: float) -> str:
   </div>
 
   <script>
-    const DATA = __DATA_JSON__;
+    let DATA = __DATA_JSON__;
     const DT_SEC = __DT_SEC__;
     const FIRE_RANGE_M = 1200.0;
     const FIRE_AZIMUTH_DEG = __FIRE_AZIMUTH_DEG__;
@@ -422,6 +455,103 @@ def _html_with_data(data_json: str, dt_sec: float) -> str:
     const $ = (id) => document.getElementById(id);
     const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
     const lerp = (a, b, t) => a + (b - a) * t;
+
+    function parseCsvLine(line) {
+      const cells = [];
+      let cur = "";
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i += 1) {
+        const ch = line[i];
+        if (ch === '"') {
+          if (inQuotes && line[i + 1] === '"') {
+            cur += '"';
+            i += 1;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (ch === "," && !inQuotes) {
+          cells.push(cur);
+          cur = "";
+        } else {
+          cur += ch;
+        }
+      }
+      cells.push(cur);
+      return cells;
+    }
+
+    function asNum(row, key, fallback = 0.0) {
+      const v = row[key];
+      if (v === undefined || v === null || v === "") return fallback;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : fallback;
+    }
+
+    function buildPayloadFromRows(rows) {
+      const payload = { episodes: {} };
+      rows.forEach((row) => {
+        const ep = String(parseInt(row.episode || "0", 10) || 0);
+        const plane = String(row.plane_id || "plane_0");
+        if (!payload.episodes[ep]) payload.episodes[ep] = {};
+        if (!payload.episodes[ep][plane]) {
+          payload.episodes[ep][plane] = {
+            step: [], reward: [], heading_deg: [], roll_deg: [], pitch_deg: [], target_track_deg: [],
+            track_err_deg: [], alt_ft: [], speed_kts: [], range_m: [], bearing_error_deg: [],
+            elevation_error_deg: [], heading_difference_deg: [], target_roll_deg: [], current_roll_deg: [],
+            roll_error_deg: [], throttle_cmd: [], aileron_cmd: [], elevator_cmd: [], rudder_cmd: [],
+            done: [], opponent_plane_id: []
+          };
+        }
+        const s = payload.episodes[ep][plane];
+        s.step.push(parseInt(row.step || String(s.step.length), 10) || 0);
+        s.reward.push(asNum(row, "reward"));
+        s.heading_deg.push(asNum(row, "attitude_psi_deg", asNum(row, "heading_deg")));
+        s.roll_deg.push(asNum(row, "roll_deg"));
+        s.pitch_deg.push(asNum(row, "pitch_deg"));
+        s.target_track_deg.push(asNum(row, "target_track_deg"));
+        s.track_err_deg.push(asNum(row, "error_track_error_deg"));
+        s.alt_ft.push(asNum(row, "position_h_sl_ft"));
+        s.speed_kts.push(asNum(row, "velocities_u_fps") * 0.592484);
+        s.range_m.push(asNum(row, "range_m", 9999));
+        s.bearing_error_deg.push(asNum(row, "bearing_error_deg"));
+        s.elevation_error_deg.push(asNum(row, "elevation_error_deg"));
+        s.heading_difference_deg.push(asNum(row, "heading_difference_deg"));
+        s.target_roll_deg.push(asNum(row, "target_roll_deg"));
+        s.current_roll_deg.push(asNum(row, "current_roll_deg", asNum(row, "roll_deg")));
+        s.roll_error_deg.push(asNum(row, "roll_error_deg"));
+        s.throttle_cmd.push(asNum(row, "fcs_throttle_cmd_norm", 0.8));
+        s.aileron_cmd.push(asNum(row, "fcs_aileron_cmd_norm"));
+        s.elevator_cmd.push(asNum(row, "fcs_elevator_cmd_norm"));
+        s.rudder_cmd.push(asNum(row, "fcs_rudder_cmd_norm"));
+        s.done.push(String(row.done || "").toLowerCase() === "true");
+        s.opponent_plane_id.push(String(row.opponent_plane_id || ""));
+      });
+      Object.values(payload.episodes).forEach((epPlanes) => {
+        Object.values(epPlanes).forEach((s) => {
+          const order = s.step.map((step, idx) => [step, idx]).sort((a, b) => a[0] - b[0]).map((x) => x[1]);
+          Object.keys(s).forEach((key) => {
+            s[key] = order.map((idx) => s[key][idx]);
+          });
+        });
+      });
+      return payload;
+    }
+
+    function loadCsvText(text, filename = "csv") {
+      const lines = text.split(/\\r?\\n/).filter((line) => line.trim().length > 0);
+      if (!lines.length) throw new Error("CSV is empty");
+      const header = parseCsvLine(lines[0]);
+      const rows = lines.slice(1).map((line) => {
+        const cells = parseCsvLine(line);
+        const row = {};
+        header.forEach((key, idx) => { row[key] = cells[idx] ?? ""; });
+        return row;
+      });
+      DATA = buildPayloadFromRows(rows);
+      fillSelectors();
+      renderFrame(0);
+      $("status").textContent = `Loaded ${filename} with ${rows.length} rows`;
+    }
 
     let rendererMode = "fallback";
     let renderer = null;
@@ -825,6 +955,19 @@ def _html_with_data(data_json: str, dt_sec: float) -> str:
       $("btnPlay").textContent = state.playing ? "Pause" : "Play";
     };
     $("speedSel").onchange = (e) => { state.speed = parseFloat(e.target.value || "1"); };
+    $("fileInput").onchange = (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          loadCsvText(String(reader.result || ""), file.name);
+        } catch (err) {
+          $("status").textContent = `CSV load failed: ${err.message || err}`;
+        }
+      };
+      reader.readAsText(file);
+    };
     $("timeline").oninput = (e) => {
       state.idx = parseInt(e.target.value || "0", 10) || 0;
       renderFrame(state.idx);
