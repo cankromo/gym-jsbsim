@@ -48,7 +48,7 @@
     }
     #topbar {
       display: grid;
-      grid-template-columns: 1fr auto auto auto auto auto auto;
+      grid-template-columns: 1fr auto auto auto auto auto;
       gap: 10px;
       align-items: center;
       padding: 12px;
@@ -72,19 +72,15 @@
       font-size: 12px;
     }
     .ctrl label { font-weight: 700; }
-    select, button, input[type="range"], input[type="file"] {
+    select, button, input[type="range"] {
       min-height: 36px;
       border-radius: 10px;
       border: 1px solid rgba(96, 124, 168, 0.5);
     }
-    select, button, input[type="file"] {
+    select, button {
       background: #0a1321;
       color: var(--text);
       padding: 8px 10px;
-    }
-    input[type="file"] {
-      max-width: 220px;
-      font-size: 12px;
     }
     button {
       cursor: pointer;
@@ -116,6 +112,34 @@
       border-radius: 28px;
       pointer-events: none;
       box-shadow: inset 0 0 120px rgba(0, 0, 0, 0.42);
+    }
+    #canopyArch {
+      position: absolute;
+      left: 50%;
+      top: 10px;
+      width: min(92vw, 1100px);
+      height: 200px;
+      transform: translateX(-50%);
+      border: 2px solid rgba(125, 249, 255, 0.14);
+      border-bottom: none;
+      border-radius: 520px 520px 0 0;
+      box-shadow:
+        inset 0 0 40px rgba(125, 249, 255, 0.05),
+        0 0 40px rgba(0, 0, 0, 0.2);
+      pointer-events: none;
+    }
+    #canopyBow {
+      position: absolute;
+      left: 50%;
+      top: 8px;
+      width: 14px;
+      height: 230px;
+      transform: translateX(-50%);
+      background: linear-gradient(180deg, rgba(18, 29, 45, 0.15), rgba(5, 10, 18, 0.85));
+      border-left: 1px solid rgba(125, 249, 255, 0.16);
+      border-right: 1px solid rgba(125, 249, 255, 0.16);
+      box-shadow: 0 0 18px rgba(0, 0, 0, 0.25);
+      pointer-events: none;
     }
     #hudOverlay {
       position: absolute;
@@ -240,19 +264,119 @@
       color: var(--danger);
       display: none;
     }
-    #miniJet {
+    #cockpitPanel {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 36%;
+      pointer-events: none;
+      background:
+        linear-gradient(180deg, rgba(8, 14, 24, 0.08) 0%, rgba(4, 8, 14, 0.9) 20%, rgba(3, 6, 11, 0.98) 100%);
+      clip-path: polygon(0% 100%, 0% 82%, 16% 58%, 28% 50%, 42% 44%, 58% 44%, 72% 50%, 84% 58%, 100% 82%, 100% 100%);
+      border-top: 1px solid rgba(125, 249, 255, 0.1);
+      box-shadow: inset 0 20px 50px rgba(0, 0, 0, 0.42);
+    }
+    #glareshield {
       position: absolute;
       left: 50%;
-      bottom: 110px;
-      width: 110px;
-      height: 56px;
+      bottom: 26%;
+      width: min(80vw, 940px);
+      height: 54px;
       transform: translateX(-50%);
-      opacity: 0.85;
+      background: linear-gradient(180deg, #141b26, #070d16);
+      border: 1px solid rgba(125, 249, 255, 0.08);
+      border-radius: 26px 26px 14px 14px;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+      pointer-events: none;
     }
-    #miniJet svg {
-      width: 100%;
-      height: 100%;
-      display: block;
+    #mfdRow {
+      position: absolute;
+      left: 50%;
+      bottom: 6%;
+      width: min(78vw, 980px);
+      transform: translateX(-50%);
+      display: grid;
+      grid-template-columns: 1fr 0.86fr 1fr;
+      gap: 18px;
+      pointer-events: none;
+    }
+    .mfd {
+      position: relative;
+      height: 170px;
+      border-radius: 18px;
+      background:
+        linear-gradient(180deg, rgba(5, 10, 18, 0.96), rgba(2, 5, 10, 0.98));
+      border: 1px solid rgba(125, 249, 255, 0.12);
+      box-shadow:
+        inset 0 0 30px rgba(0, 0, 0, 0.55),
+        0 14px 26px rgba(0, 0, 0, 0.35);
+    }
+    .mfd::before {
+      content: "";
+      position: absolute;
+      inset: 12px;
+      border-radius: 12px;
+      background:
+        linear-gradient(180deg, rgba(18, 37, 28, 0.82), rgba(5, 16, 13, 0.96));
+      border: 1px solid rgba(82, 255, 168, 0.14);
+      box-shadow: inset 0 0 32px rgba(82, 255, 168, 0.08);
+    }
+    .mfd.center::before {
+      background:
+        linear-gradient(180deg, rgba(18, 29, 43, 0.82), rgba(7, 12, 18, 0.96));
+      border-color: rgba(125, 249, 255, 0.12);
+      box-shadow: inset 0 0 32px rgba(125, 249, 255, 0.06);
+    }
+    .mfdLabel {
+      position: absolute;
+      top: 20px;
+      left: 24px;
+      font-size: 11px;
+      font-family: "IBM Plex Mono", monospace;
+      color: rgba(190, 255, 214, 0.75);
+      letter-spacing: 1.1px;
+      z-index: 1;
+    }
+    .mfd.center .mfdLabel {
+      color: rgba(190, 235, 255, 0.74);
+    }
+    .mfdGrid {
+      position: absolute;
+      inset: 22px;
+      z-index: 1;
+      opacity: 0.35;
+      background:
+        linear-gradient(rgba(125,249,255,0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(125,249,255,0.08) 1px, transparent 1px);
+      background-size: 24px 24px;
+      border-radius: 12px;
+    }
+    .mfdSweep {
+      position: absolute;
+      inset: 22px;
+      z-index: 1;
+      border-radius: 12px;
+      background: radial-gradient(circle at 50% 120%, rgba(125,249,255,0.14), transparent 55%);
+      mix-blend-mode: screen;
+      opacity: 0.5;
+    }
+    #panelShoulderL, #panelShoulderR {
+      position: absolute;
+      bottom: 0;
+      width: 20%;
+      height: 42%;
+      background: linear-gradient(180deg, rgba(9, 14, 23, 0.1), rgba(3, 6, 11, 0.96));
+      border-top: 1px solid rgba(125, 249, 255, 0.08);
+      pointer-events: none;
+    }
+    #panelShoulderL {
+      left: 0;
+      clip-path: polygon(0 100%, 0 30%, 100% 0, 100% 100%);
+    }
+    #panelShoulderR {
+      right: 0;
+      clip-path: polygon(0 0, 100% 30%, 100% 100%, 0 100%);
     }
     #timelineBar {
       display: grid;
@@ -312,10 +436,6 @@
         </select>
       </div>
       <div class="ctrl">
-        <label for="fileInput">CSV Load</label>
-        <input id="fileInput" type="file" accept=".csv,text/csv" />
-      </div>
-      <div class="ctrl">
         <label>&nbsp;</label>
         <button id="btnPlay">Pause</button>
       </div>
@@ -327,6 +447,8 @@
     <div id="stage" class="panel">
       <canvas id="view"></canvas>
       <div id="frame"></div>
+      <div id="canopyArch"></div>
+      <div id="canopyBow"></div>
       <div id="hudOverlay">
         <div id="leftStats" class="hudBox"></div>
         <div id="rightStats" class="hudBox"></div>
@@ -337,15 +459,26 @@
         <div id="targetLabel">TARGET</div>
         <div id="fireCue">FIRE CUE</div>
         <div id="warningCue">THREAT</div>
-        <div id="miniJet" aria-hidden="true">
-          <svg viewBox="0 0 220 110" xmlns="http://www.w3.org/2000/svg">
-            <g fill="none" stroke="#7df9ff" stroke-width="4" stroke-linejoin="round">
-              <path d="M20 55 L84 48 L130 16 L144 18 L122 49 L164 55 L122 61 L144 92 L130 94 L84 62 L20 55 Z" fill="rgba(125,249,255,0.08)"/>
-              <path d="M68 55 L182 55"/>
-              <path d="M96 40 L96 70"/>
-              <path d="M52 45 L76 55 L52 65"/>
-            </g>
-          </svg>
+        <div id="glareshield"></div>
+        <div id="panelShoulderL"></div>
+        <div id="panelShoulderR"></div>
+        <div id="cockpitPanel"></div>
+        <div id="mfdRow">
+          <div class="mfd">
+            <div class="mfdLabel">SMS / TACTICAL</div>
+            <div class="mfdGrid"></div>
+            <div class="mfdSweep"></div>
+          </div>
+          <div class="mfd center">
+            <div class="mfdLabel">HUD REPEATER</div>
+            <div class="mfdGrid"></div>
+            <div class="mfdSweep"></div>
+          </div>
+          <div class="mfd">
+            <div class="mfdLabel">RDR / THREAT</div>
+            <div class="mfdGrid"></div>
+            <div class="mfdSweep"></div>
+          </div>
         </div>
       </div>
     </div>
