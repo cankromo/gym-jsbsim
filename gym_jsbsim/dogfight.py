@@ -163,13 +163,15 @@ class DogfightEnv:
                  spawn_separation_m: float = DEFAULT_SPAWN_SEPARATION_M,
                  altitude_separation_ft: float = DEFAULT_ALTITUDE_SEPARATION_FT,
                  spawn_seed: Optional[int] = None,
-                 scenario_name: Optional[str] = None):
+                 scenario_name: Optional[str] = None,
+                 scenario_names: Optional[Sequence[str]] = None):
         apply_jsbsim_runtime_compat()
         self.agent_order = ("plane_a", "plane_b")
         self.spawn_separation_m = float(max(200.0, spawn_separation_m))
         self.altitude_separation_ft = float(max(0.0, altitude_separation_ft))
         self._spawn_rng = np.random.default_rng(spawn_seed)
         self._scenario_name = scenario_name
+        self._scenario_names = tuple(scenario_names or ())
         self.current_scenario_name = scenario_name or "random"
         self.world = SharedWorldJsbSimEnv(
             members=(
@@ -204,6 +206,8 @@ class DogfightEnv:
 
     def set_scenario(self, scenario_name: Optional[str]) -> None:
         self._scenario_name = scenario_name
+        if scenario_name is not None:
+            self._scenario_names = ()
         self.current_scenario_name = scenario_name or "random"
 
     def _apply_scenario(self, scenario_name: str) -> None:
@@ -239,12 +243,18 @@ class DogfightEnv:
     def close(self):
         self.world.close()
 
+    def _policy_state_variables(self, agent: str):
+        task = self.world.tasks[agent]
+        return tuple(prop for prop in task.state_variables if prop != getattr(task, "target_roll_rad", None))
+
     def _build_observation_space(self, agent: str) -> gym.spaces.Box:
-        base_space = self.world.observation_space[agent]
+        state_variables = self._policy_state_variables(agent)
+        low = np.array([prop.min for prop in state_variables], dtype=np.float32)
+        high = np.array([prop.max for prop in state_variables], dtype=np.float32)
         extra_low = np.array([0.0, -1.0, -1.0, -1.0, -1.0, -1.0], dtype=np.float32)
         extra_high = np.array([1.0, 1.0, 1.0, 1.0, 1.0, 1.0], dtype=np.float32)
-        low = np.concatenate([base_space.low.astype(np.float32), extra_low])
-        high = np.concatenate([base_space.high.astype(np.float32), extra_high])
+        low = np.concatenate([low, extra_low])
+        high = np.concatenate([high, extra_high])
         return gym.spaces.Box(low=low, high=high, dtype=np.float32)
 
     def _sim(self, agent: str):
@@ -268,8 +278,7 @@ class DogfightEnv:
     def _observation_for(self, agent: str) -> np.ndarray:
         own_sim = self._sim(agent)
         opponent_sim = self._sim(self._opponent(agent))
-        task = self.world.tasks[agent]
-        base_obs = np.array([own_sim[prop] for prop in task.state_variables], dtype=np.float32)
+        base_obs = np.array([own_sim[prop] for prop in self._policy_state_variables(agent)], dtype=np.float32)
         rel = compute_relative_geometry(own_sim, opponent_sim)
         extra = np.array([
             min(1.0, rel.range_m / self.RANGE_SCALE_M),
@@ -342,6 +351,9 @@ class DogfightEnv:
     def reset(self) -> Dict[str, np.ndarray]:
         if self._scenario_name:
             self._apply_scenario(self._scenario_name)
+        elif self._scenario_names:
+            sampled_scenario = str(self._spawn_rng.choice(self._scenario_names))
+            self._apply_scenario(sampled_scenario)
         else:
             self._randomize_spawn_offsets()
         self.world.reset()

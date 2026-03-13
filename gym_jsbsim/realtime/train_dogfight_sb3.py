@@ -27,7 +27,10 @@ def _wrap_gymnasium_if_needed(env):
     return shimmy.GymV21CompatibilityV0(env=env)
 
 
-def _make_vec_env(controlled_agent: str, opponent_policy, vecnormalize_path: str = ""):
+def _make_vec_env(controlled_agent: str,
+                  opponent_policy,
+                  vecnormalize_path: str = "",
+                  scenario_names: list[str] | None = None):
     from stable_baselines3.common.monitor import Monitor
     from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
@@ -35,6 +38,7 @@ def _make_vec_env(controlled_agent: str, opponent_policy, vecnormalize_path: str
         env = DogfightSingleAgentEnv(
             controlled_agent=controlled_agent,
             opponent_policy=opponent_policy,
+            scenario_names=scenario_names,
         )
         env = _wrap_gymnasium_if_needed(env)
         return Monitor(env)
@@ -70,7 +74,8 @@ def train_single_agent(controlled_agent: str,
                        opponent_policy,
                        model_path: str = "",
                        vecnormalize_path: str = "",
-                       snapshot_tag: str = "") -> None:
+                       snapshot_tag: str = "",
+                       scenario_names: list[str] | None = None) -> None:
     from stable_baselines3 import PPO
 
     os.makedirs(model_dir, exist_ok=True)
@@ -84,6 +89,7 @@ def train_single_agent(controlled_agent: str,
         controlled_agent=controlled_agent,
         opponent_policy=opponent_policy,
         vecnormalize_path=load_vecnorm_path,
+        scenario_names=scenario_names,
     )
     if resuming:
         model = PPO.load(load_model_path, env=vec_env)
@@ -119,7 +125,8 @@ def train_self_play_cycle(rounds: int,
                           model_a_path: str,
                           vecnorm_a_path: str,
                           model_b_path: str,
-                          vecnorm_b_path: str) -> None:
+                          vecnorm_b_path: str,
+                          train_scenario_names: list[str] | None = None) -> None:
     # Bootstrap plane_a once if there is no existing A policy.
     if not os.path.exists(model_a_path):
         train_single_agent(
@@ -131,6 +138,7 @@ def train_self_play_cycle(rounds: int,
             model_path=model_a_path.removesuffix(".zip"),
             vecnormalize_path=vecnorm_a_path,
             snapshot_tag="bootstrap_a",
+            scenario_names=train_scenario_names,
         )
 
     for round_idx in range(1, rounds + 1):
@@ -144,6 +152,7 @@ def train_self_play_cycle(rounds: int,
             model_path=model_b_path.removesuffix(".zip"),
             vecnormalize_path=vecnorm_b_path,
             snapshot_tag=f"round_{round_idx:03d}_plane_b",
+            scenario_names=train_scenario_names,
         )
 
         opponent_policy_a = _load_frozen_opponent("plane_b", model_b_path, vecnorm_b_path)
@@ -156,6 +165,7 @@ def train_self_play_cycle(rounds: int,
             model_path=model_a_path.removesuffix(".zip"),
             vecnormalize_path=vecnorm_a_path,
             snapshot_tag=f"round_{round_idx:03d}_plane_a",
+            scenario_names=train_scenario_names,
         )
 
 
@@ -259,6 +269,12 @@ def _resolve_eval_scenarios(scenario_set: str, scenario_name: str) -> list[str] 
     return None
 
 
+def _resolve_train_scenarios(scenario_set: str) -> list[str] | None:
+    if scenario_set == "all":
+        return list_scenarios()
+    return None
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train additive dogfight policies with SB3.")
     parser.add_argument("--mode", choices=("train_a", "train_b", "train_cycle", "eval", "eval_a", "eval_b"), required=True)
@@ -275,6 +291,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--vecnorm-b-path", default=DEFAULT_VECNORM_B_PATH)
     parser.add_argument("--csv-path", default=DEFAULT_EVAL_CSV)
     parser.add_argument("--csv-plane-id", choices=("all", "plane_a", "plane_b"), default="all")
+    parser.add_argument("--train-scenario-set", choices=("all", "random"), default="random")
     parser.add_argument("--scenario-set", choices=("all", "random"), default="all")
     parser.add_argument("--scenario-name", default="")
     return parser.parse_args()
@@ -283,16 +300,19 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     if args.mode == "train_a":
+        train_scenario_names = _resolve_train_scenarios(args.train_scenario_set)
         train_single_agent(
             controlled_agent="plane_a",
             total_timesteps=args.timesteps,
             seed=args.seed,
             model_dir=args.model_a_dir,
             opponent_policy=StableOpponentPolicy(),
+            scenario_names=train_scenario_names,
         )
         return
 
     if args.mode == "train_b":
+        train_scenario_names = _resolve_train_scenarios(args.train_scenario_set)
         opponent_policy = _load_frozen_opponent("plane_a", args.model_a_path, args.vecnorm_a_path)
         train_single_agent(
             controlled_agent="plane_b",
@@ -300,10 +320,12 @@ def main() -> None:
             seed=args.seed,
             model_dir=args.model_b_dir,
             opponent_policy=opponent_policy,
+            scenario_names=train_scenario_names,
         )
         return
 
     if args.mode == "train_cycle":
+        train_scenario_names = _resolve_train_scenarios(args.train_scenario_set)
         train_self_play_cycle(
             rounds=args.rounds,
             total_timesteps=args.timesteps,
@@ -314,6 +336,7 @@ def main() -> None:
             vecnorm_a_path=args.vecnorm_a_path,
             model_b_path=args.model_b_path,
             vecnorm_b_path=args.vecnorm_b_path,
+            train_scenario_names=train_scenario_names,
         )
         return
 

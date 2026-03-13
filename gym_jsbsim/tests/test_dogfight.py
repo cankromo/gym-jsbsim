@@ -1,4 +1,5 @@
 import math
+import types
 import unittest
 
 from gym_jsbsim import properties as prp
@@ -91,3 +92,31 @@ class TestDogfightScenarios(unittest.TestCase):
         self.assertAlmostEqual(scenario.plane_b.north_offset_m, 250.0)
         self.assertAlmostEqual(scenario.plane_a.heading_deg, 0.0)
         self.assertAlmostEqual(scenario.plane_b.heading_deg, 180.0)
+
+    def test_set_scenario_clears_scenario_library_sampling(self):
+        env = DogfightEnv.__new__(DogfightEnv)
+        env._scenario_name = None
+        env._scenario_names = ("head_on_500m", "plane_a_behind_600m")
+        env.current_scenario_name = "random"
+
+        env.set_scenario("head_on_500m")
+
+        self.assertEqual(env._scenario_name, "head_on_500m")
+        self.assertEqual(env._scenario_names, ())
+        self.assertEqual(env.current_scenario_name, "head_on_500m")
+
+    def test_policy_state_variables_exclude_target_roll(self):
+        env = DogfightEnv.__new__(DogfightEnv)
+        target_roll = prp.Property("target/roll-rad", "")
+        env.world = types.SimpleNamespace(
+            tasks={
+                "plane_a": types.SimpleNamespace(
+                    state_variables=(prp.altitude_sl_ft, target_roll, prp.roll_rad),
+                    target_roll_rad=target_roll,
+                )
+            }
+        )
+
+        state_variables = env._policy_state_variables("plane_a")
+
+        self.assertEqual(state_variables, (prp.altitude_sl_ft, prp.roll_rad))

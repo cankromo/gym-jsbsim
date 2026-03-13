@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Sequence
 
 import gym
 import numpy as np
@@ -20,9 +20,10 @@ class DogfightSingleAgentEnv(gym.Env):
 
     def __init__(self,
                  controlled_agent: str = "plane_a",
-                 opponent_policy: Optional[OpponentPolicy] = None):
+                 opponent_policy: Optional[OpponentPolicy] = None,
+                 scenario_names: Optional[Sequence[str]] = None):
         super().__init__()
-        self.core = DogfightEnv()
+        self.core = DogfightEnv(scenario_names=scenario_names)
         if controlled_agent not in self.core.agent_order:
             raise ValueError(f"Unknown controlled agent: {controlled_agent}")
         self.controlled_agent = controlled_agent
