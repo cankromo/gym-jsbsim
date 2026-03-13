@@ -30,7 +30,7 @@ def _series(df: pd.DataFrame, key: str, default: float = 0.0) -> list[float]:
     return [default] * len(df)
 
 
-def _build_payload(df: pd.DataFrame, stride: int) -> dict:
+def _build_payload(df: pd.DataFrame, stride: int, dt_sec: float) -> dict:
     work = df.copy()
     if "plane_id" not in work.columns:
         work["plane_id"] = "plane_0"
@@ -43,8 +43,15 @@ def _build_payload(df: pd.DataFrame, stride: int) -> dict:
         plane_payload = {}
         for plane_id, plane_df in ep_df.groupby("plane_id", sort=True):
             plane_df = plane_df.sort_values("step").reset_index(drop=True)
+            if "simulation_sim_time_sec" in plane_df.columns:
+                sim_time_sec = plane_df["simulation_sim_time_sec"].astype(float).tolist()
+            else:
+                # Preserve compatibility with older CSV exports that only
+                # contained a rollout step index.
+                sim_time_sec = [float(step) * float(dt_sec) for step in plane_df["step"].astype(float)]
             plane_payload[str(plane_id)] = {
                 "step": plane_df["step"].astype(int).tolist(),
+                "sim_time_sec": sim_time_sec,
                 "reward": _series(plane_df, "reward"),
                 "heading_deg": _series(plane_df, "attitude_psi_deg"),
                 "roll_deg": _series(plane_df, "roll_deg"),
@@ -450,13 +457,14 @@ def _html_with_data(data_json: str, dt_sec: float) -> str:
       idx: 0,
       playing: true,
       speed: 1.0,
-      acc: 0.0,
       lastTs: performance.now(),
     };
 
     const $ = (id) => document.getElementById(id);
     const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
     const lerp = (a, b, t) => a + (b - a) * t;
+    const normAngleDeg = (deg) => ((deg + 180) % 360 + 360) % 360 - 180;
+    const lerpAngleDeg = (a, b, t) => a + normAngleDeg(b - a) * t;
 
     function parseCsvLine(line) {
       const cells = [];
@@ -497,7 +505,7 @@ def _html_with_data(data_json: str, dt_sec: float) -> str:
         if (!payload.episodes[ep]) payload.episodes[ep] = {};
         if (!payload.episodes[ep][plane]) {
           payload.episodes[ep][plane] = {
-            step: [], reward: [], heading_deg: [], roll_deg: [], pitch_deg: [], target_track_deg: [],
+            step: [], sim_time_sec: [], reward: [], heading_deg: [], roll_deg: [], pitch_deg: [], target_track_deg: [],
             track_err_deg: [], alt_ft: [], speed_kts: [], range_m: [], bearing_error_deg: [],
             elevation_error_deg: [], heading_difference_deg: [], target_roll_deg: [], current_roll_deg: [],
             roll_error_deg: [], throttle_cmd: [], aileron_cmd: [], elevator_cmd: [], rudder_cmd: [],
@@ -506,6 +514,7 @@ def _html_with_data(data_json: str, dt_sec: float) -> str:
         }
         const s = payload.episodes[ep][plane];
         s.step.push(parseInt(row.step || String(s.step.length), 10) || 0);
+        s.sim_time_sec.push(asNum(row, "simulation_sim_time_sec", asNum(row, "sim_time_sec", s.step[s.step.length - 1] * DT_SEC)));
         s.reward.push(asNum(row, "reward"));
         s.heading_deg.push(asNum(row, "attitude_psi_deg", asNum(row, "heading_deg")));
         s.roll_deg.push(asNum(row, "roll_deg"));
@@ -749,50 +758,90 @@ def _html_with_data(data_json: str, dt_sec: float) -> str:
       fpm.style.top = `${y}px`;
     }
 
-    function updateHud(s, i) {
-      const heading = s.heading_deg[i];
-      const roll = s.roll_deg[i];
-      const pitch = s.pitch_deg[i];
-      const targetHeading = s.target_track_deg[i];
-      const bearing = s.bearing_error_deg[i];
-      const elevation = s.elevation_error_deg[i];
-      const range = s.range_m[i];
+    function sampledFrame(s, cursor) {
+      const maxIndex = Math.max(0, s.step.length - 1);
+      const base = clamp(cursor, 0, maxIndex);
+      const i0 = Math.floor(base);
+      const i1 = Math.min(maxIndex, i0 + 1);
+      const t = i1 === i0 ? 0.0 : base - i0;
+      const pick = (key) => s[key][i0];
+      const interp = (key) => lerp(s[key][i0], s[key][i1], t);
+      const interpAngle = (key) => lerpAngleDeg(s[key][i0], s[key][i1], t);
+      return {
+        cursor: base,
+        baseIndex: i0,
+        nextIndex: i1,
+        alpha: t,
+        step: interp("step"),
+        sim_time_sec: interp("sim_time_sec"),
+        reward: interp("reward"),
+        heading_deg: interpAngle("heading_deg"),
+        roll_deg: interp("roll_deg"),
+        pitch_deg: interp("pitch_deg"),
+        target_track_deg: interpAngle("target_track_deg"),
+        track_err_deg: interpAngle("track_err_deg"),
+        alt_ft: interp("alt_ft"),
+        speed_kts: interp("speed_kts"),
+        range_m: interp("range_m"),
+        bearing_error_deg: interpAngle("bearing_error_deg"),
+        elevation_error_deg: interp("elevation_error_deg"),
+        heading_difference_deg: interpAngle("heading_difference_deg"),
+        target_roll_deg: interp("target_roll_deg"),
+        current_roll_deg: interp("current_roll_deg"),
+        roll_error_deg: interp("roll_error_deg"),
+        throttle_cmd: interp("throttle_cmd"),
+        aileron_cmd: interp("aileron_cmd"),
+        elevator_cmd: interp("elevator_cmd"),
+        rudder_cmd: interp("rudder_cmd"),
+        done: Boolean(s.done[i0]),
+        opponent_plane_id: s.opponent_plane_id[i0] || "",
+      };
+    }
+
+    function updateHud(frame) {
+      const heading = frame.heading_deg;
+      const roll = frame.roll_deg;
+      const pitch = frame.pitch_deg;
+      const targetHeading = frame.target_track_deg;
+      const bearing = frame.bearing_error_deg;
+      const elevation = frame.elevation_error_deg;
+      const range = frame.range_m;
       const fireCue = range <= FIRE_RANGE_M && Math.abs(bearing) <= FIRE_SOLUTION_DEG && Math.abs(elevation) <= FIRE_SOLUTION_DEG;
       const threat = Math.abs(bearing) > 140 && range < 1600;
 
       $("leftStats").innerHTML = `
-        <div class="kv"><div class="k">STEP</div><div class="v">${s.step[i]}</div></div>
-        <div class="kv"><div class="k">ALT</div><div class="v">${s.alt_ft[i].toFixed(0)} ft</div></div>
-        <div class="kv"><div class="k">SPD</div><div class="v">${s.speed_kts[i].toFixed(0)} kt</div></div>
+        <div class="kv"><div class="k">TIME</div><div class="v">${frame.sim_time_sec.toFixed(1)} s</div></div>
+        <div class="kv"><div class="k">ALT</div><div class="v">${frame.alt_ft.toFixed(0)} ft</div></div>
+        <div class="kv"><div class="k">SPD</div><div class="v">${frame.speed_kts.toFixed(0)} kt</div></div>
         <div class="kv"><div class="k">HDG</div><div class="v">${heading.toFixed(1)} deg</div></div>
         <div class="kv"><div class="k">ROLL</div><div class="v">${roll.toFixed(1)} deg</div></div>
         <div class="kv"><div class="k">PITCH</div><div class="v">${pitch.toFixed(1)} deg</div></div>
       `;
       $("rightStats").innerHTML = `
         <div class="kv"><div class="k">TARGET</div><div class="v">${targetHeading.toFixed(1)} deg</div></div>
-        <div class="kv"><div class="k">TRACK ERR</div><div class="v">${s.track_err_deg[i].toFixed(2)} deg</div></div>
+        <div class="kv"><div class="k">TRACK ERR</div><div class="v">${frame.track_err_deg.toFixed(2)} deg</div></div>
         <div class="kv"><div class="k">RANGE</div><div class="v">${range.toFixed(0)} m</div></div>
         <div class="kv"><div class="k">BEARING</div><div class="v">${bearing.toFixed(1)} deg</div></div>
         <div class="kv"><div class="k">ELEV</div><div class="v">${elevation.toFixed(1)} deg</div></div>
-        <div class="kv"><div class="k">REWARD</div><div class="v">${s.reward[i].toFixed(3)}</div></div>
+        <div class="kv"><div class="k">REWARD</div><div class="v">${frame.reward.toFixed(3)}</div></div>
       `;
       $("bottomCenter").innerHTML = `
         <div style="font-size:13px;color:var(--muted);margin-bottom:4px">Control Inputs and Geometry</div>
-        <div class="kv"><div class="k">AIL / EL / RUD</div><div class="v">${s.aileron_cmd[i].toFixed(2)} / ${s.elevator_cmd[i].toFixed(2)} / ${s.rudder_cmd[i].toFixed(2)}</div></div>
-        <div class="kv"><div class="k">TARGET ROLL / ERR</div><div class="v">${s.target_roll_deg[i].toFixed(1)} / ${s.roll_error_deg[i].toFixed(1)} deg</div></div>
-        <div class="kv"><div class="k">ASPECT DIFF</div><div class="v">${s.heading_difference_deg[i].toFixed(1)} deg</div></div>
+        <div class="kv"><div class="k">AIL / EL / RUD</div><div class="v">${frame.aileron_cmd.toFixed(2)} / ${frame.elevator_cmd.toFixed(2)} / ${frame.rudder_cmd.toFixed(2)}</div></div>
+        <div class="kv"><div class="k">TARGET ROLL / ERR</div><div class="v">${frame.target_roll_deg.toFixed(1)} / ${frame.roll_error_deg.toFixed(1)} deg</div></div>
+        <div class="kv"><div class="k">ASPECT DIFF</div><div class="v">${frame.heading_difference_deg.toFixed(1)} deg</div></div>
       `;
       $("fireCue").style.display = fireCue ? "block" : "none";
       $("warningCue").style.display = threat ? "block" : "none";
       updateStatus();
     }
 
-    function updateTargetCue(s, i) {
+    function updateTargetCue(frame) {
       const box = $("targetBox");
       const label = $("targetLabel");
-      const bearing = s.bearing_error_deg[i];
-      const elevation = s.elevation_error_deg[i];
-      const range = s.range_m[i];
+      const bearing = frame.bearing_error_deg;
+      const elevation = frame.elevation_error_deg;
+      const range = frame.range_m;
       let cx = 0;
       let cy = 0;
       let visible = isFinite(bearing) && isFinite(elevation) && range < 8000;
@@ -822,7 +871,7 @@ def _html_with_data(data_json: str, dt_sec: float) -> str:
       box.style.top = `${cy}px`;
       label.style.left = `${cx}px`;
       label.style.top = `${cy}px`;
-      label.textContent = `${opponentPlane() || "TARGET"} | ${range.toFixed(0)} m`;
+      label.textContent = `${frame.opponent_plane_id || "TARGET"} | ${range.toFixed(0)} m`;
       const fireLike = range <= FIRE_RANGE_M && Math.abs(bearing) <= FIRE_SOLUTION_DEG && Math.abs(elevation) <= FIRE_ELEVATION_DEG;
       box.style.borderColor = fireLike ? "var(--good)" : "var(--warn)";
       box.style.boxShadow = fireLike ? "0 0 18px rgba(82,255,168,0.32)" : "0 0 18px rgba(255,183,3,0.32)";
@@ -830,28 +879,28 @@ def _html_with_data(data_json: str, dt_sec: float) -> str:
       label.textContent += ` | ${bearing.toFixed(1)} / ${elevation.toFixed(1)} deg`;
     }
 
-    function updateScene(s, i) {
+    function updateScene(frame) {
       if (rendererMode !== "three" || !camera || !targetJet || !targetWorld || !sky || !horizonRing || !ground || !contrail) {
         return;
       }
-      const altitudeM = s.alt_ft[i] * 0.3048;
-      const pitchRad = s.pitch_deg[i] * Math.PI / 180.0;
-      const rollRad = s.roll_deg[i] * Math.PI / 180.0;
-      const yawRad = s.heading_deg[i] * Math.PI / 180.0;
+      const altitudeM = frame.alt_ft * 0.3048;
+      const pitchRad = frame.pitch_deg * Math.PI / 180.0;
+      const rollRad = frame.roll_deg * Math.PI / 180.0;
+      const yawRad = frame.heading_deg * Math.PI / 180.0;
       camera.position.set(0, altitudeM, 0);
       camera.rotation.order = "ZYX";
       camera.rotation.set(pitchRad, 0, -yawRad);
       camera.rotateZ(rollRad);
 
-      const bearingRad = s.bearing_error_deg[i] * Math.PI / 180.0;
-      const elevationRad = s.elevation_error_deg[i] * Math.PI / 180.0;
-      const range = Math.max(60, s.range_m[i]);
+      const bearingRad = frame.bearing_error_deg * Math.PI / 180.0;
+      const elevationRad = frame.elevation_error_deg * Math.PI / 180.0;
+      const range = Math.max(60, frame.range_m);
       const forward = Math.cos(elevationRad) * Math.cos(bearingRad) * range;
       const right = Math.cos(elevationRad) * Math.sin(bearingRad) * range;
       const up = Math.sin(elevationRad) * range;
       targetWorld.set(right, altitudeM + up, -forward);
       targetJet.position.copy(targetWorld);
-      targetJet.rotation.set(0.08 * Math.sin(i * 0.07), -yawRad + s.heading_difference_deg[i] * Math.PI / 180.0, 0.1 * Math.sin(i * 0.11));
+      targetJet.rotation.set(0.08 * Math.sin(frame.cursor * 0.07), -yawRad + frame.heading_difference_deg * Math.PI / 180.0, 0.1 * Math.sin(frame.cursor * 0.11));
 
       const trailPoints = [targetWorld.clone(), targetWorld.clone().add(new THREE.Vector3(0, 0, range * 0.18))];
       contrail.geometry.dispose();
@@ -862,15 +911,15 @@ def _html_with_data(data_json: str, dt_sec: float) -> str:
       ground.position.y = 0;
     }
 
-    function renderFallbackScene(s, idx) {
+    function renderFallbackScene(frame) {
       const w = canvas.width;
       const h = canvas.height;
       const cx = w * 0.5;
       const cy = h * 0.5;
       ctx.clearRect(0, 0, w, h);
 
-      const rollRad = s.roll_deg[idx] * Math.PI / 180.0;
-      const pitchPx = clamp(s.pitch_deg[idx] * 4.8, -h * 0.22, h * 0.22);
+      const rollRad = frame.roll_deg * Math.PI / 180.0;
+      const pitchPx = clamp(frame.pitch_deg * 4.8, -h * 0.22, h * 0.22);
       ctx.save();
       ctx.translate(cx, cy + pitchPx);
       ctx.rotate(-rollRad);
@@ -916,24 +965,24 @@ def _html_with_data(data_json: str, dt_sec: float) -> str:
       ctx.stroke();
     }
 
-    function renderFrame(i) {
+    function renderFrame(cursor) {
       const s = series();
       if (!s || !s.step.length) return;
-      const idx = clamp(i, 0, s.step.length - 1);
-      state.idx = idx;
+      const frame = sampledFrame(s, cursor);
+      state.idx = frame.cursor;
       syncTimeline();
       if (rendererMode === "three") {
-        updateScene(s, idx);
+        updateScene(frame);
         renderer.render(scene, camera);
       } else {
-        renderFallbackScene(s, idx);
+        renderFallbackScene(frame);
       }
       const rect = stage.getBoundingClientRect();
-      drawVelocityVector(rect.width * 0.5, rect.height * 0.5, s.roll_deg[idx], s.pitch_deg[idx]);
-      updateTargetCue(s, idx);
-      updateHud(s, idx);
-      $("progress").textContent = `${idx + 1} / ${s.step.length}`;
-      $("timeline").value = String(idx);
+      drawVelocityVector(rect.width * 0.5, rect.height * 0.5, frame.roll_deg, frame.pitch_deg);
+      updateTargetCue(frame);
+      updateHud(frame);
+      $("progress").textContent = `${frame.sim_time_sec.toFixed(1)} s / ${s.sim_time_sec[s.sim_time_sec.length - 1].toFixed(1)} s`;
+      $("timeline").value = String(frame.cursor);
     }
 
     function tick(ts) {
@@ -942,11 +991,7 @@ def _html_with_data(data_json: str, dt_sec: float) -> str:
       const delta = (ts - state.lastTs) / 1000.0;
       state.lastTs = ts;
       if (state.playing && n > 0) {
-        state.acc += delta * state.speed;
-        while (state.acc >= DT_SEC && state.idx < n - 1) {
-          state.idx += 1;
-          state.acc -= DT_SEC;
-        }
+        state.idx = Math.min(n - 1, state.idx + (delta * state.speed / DT_SEC));
       }
       renderFrame(state.idx);
       requestAnimationFrame(tick);
@@ -971,7 +1016,7 @@ def _html_with_data(data_json: str, dt_sec: float) -> str:
       reader.readAsText(file);
     };
     $("timeline").oninput = (e) => {
-      state.idx = parseInt(e.target.value || "0", 10) || 0;
+      state.idx = parseFloat(e.target.value || "0") || 0;
       renderFrame(state.idx);
     };
     $("episodeSel").onchange = (e) => {
@@ -1040,7 +1085,7 @@ def main() -> None:
     output_html.parent.mkdir(parents=True, exist_ok=True)
 
     df = pd.read_csv(csv_path)
-    payload = _build_payload(df, stride=args.stride)
+    payload = _build_payload(df, stride=args.stride, dt_sec=args.dt_sec)
     data_json = json.dumps(payload, separators=(",", ":"))
     if args.template == "merged":
         html = _html_from_merged_template(data_json, args.dt_sec)

@@ -178,6 +178,7 @@ class SharedWorldJsbSimEnv(gym.Env):
     def _telemetry_props(self, task) -> Tuple[prp.Property, ...]:
         props = list(task.state_variables)
         extras = [
+            prp.sim_time_s,
             prp.heading_deg,
             prp.lat_geod_deg,
             prp.lng_geoc_deg,
