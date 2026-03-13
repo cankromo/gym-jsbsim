@@ -52,6 +52,7 @@ def _build_payload(df: pd.DataFrame, stride: int, dt_sec: float) -> dict:
             plane_payload[str(plane_id)] = {
                 "step": plane_df["step"].astype(int).tolist(),
                 "sim_time_sec": sim_time_sec,
+                "scenario_name": plane_df.get("scenario_name", pd.Series(["random"] * len(plane_df))).astype(str).tolist(),
                 "reward": _series(plane_df, "reward"),
                 "heading_deg": _series(plane_df, "attitude_psi_deg"),
                 "roll_deg": _series(plane_df, "roll_deg"),
@@ -732,7 +733,9 @@ def _html_with_data(data_json: str, dt_sec: float) -> str:
 
     function updateStatus() {
       const opp = opponentPlane() || "none";
-      $("status").textContent = `Episode ${state.episode} | cockpit ${state.plane} | target ${opp}`;
+      const s = series();
+      const scenario = s && s.scenario_name && s.scenario_name.length ? s.scenario_name[Math.min(Math.floor(state.idx), s.scenario_name.length - 1)] : "random";
+      $("status").textContent = `Episode ${state.episode} | scenario ${scenario} | cockpit ${state.plane} | target ${opp}`;
     }
 
     function resize() {

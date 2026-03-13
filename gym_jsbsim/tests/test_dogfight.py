@@ -4,6 +4,7 @@ import types
 
 from gym_jsbsim import properties as prp
 from gym_jsbsim.dogfight import DogfightEnv, compute_relative_geometry, telemetry_fieldnames
+from gym_jsbsim.dogfight_scenarios import get_scenario, list_scenarios
 
 
 class FakeSim(dict):
@@ -48,13 +49,14 @@ class TestDogfightGeometry(unittest.TestCase):
 class TestTelemetryFieldnames(unittest.TestCase):
     def test_fieldnames_preserve_base_columns(self):
         rows = [
-            {"plane_id": "plane_a", "episode": 0, "step": 0, "reward": 1.0, "done": False, "range_m": 100.0},
+            {"plane_id": "plane_a", "episode": 0, "step": 0, "reward": 1.0, "done": False, "range_m": 100.0, "scenario_name": "head_on_500m"},
             {"plane_id": "plane_b", "episode": 0, "step": 0, "reward": 0.5, "done": False, "bearing_error_deg": 2.0},
         ]
         names = telemetry_fieldnames(rows)
         self.assertEqual(names[:5], ["plane_id", "episode", "step", "reward", "done"])
         self.assertIn("range_m", names)
         self.assertIn("bearing_error_deg", names)
+        self.assertIn("scenario_name", names)
 
 
 class TestDogfightRewardHelpers(unittest.TestCase):
@@ -106,3 +108,19 @@ class TestDogfightRewardHelpers(unittest.TestCase):
 
         self.assertAlmostEqual(info["roll_quality"], 0.0)
         self.assertAlmostEqual(info["roll_error_deg"], 45.0)
+
+
+class TestDogfightScenarios(unittest.TestCase):
+    def test_scenario_catalog_contains_expected_named_cases(self):
+        names = list_scenarios()
+        self.assertIn("head_on_500m", names)
+        self.assertIn("plane_a_behind_600m", names)
+        self.assertIn("vertical_stack_a_high_500ft", names)
+        self.assertGreaterEqual(len(names), 12)
+
+    def test_get_scenario_returns_configured_offsets_and_headings(self):
+        scenario = get_scenario("head_on_500m")
+        self.assertAlmostEqual(scenario.plane_a.north_offset_m, -250.0)
+        self.assertAlmostEqual(scenario.plane_b.north_offset_m, 250.0)
+        self.assertAlmostEqual(scenario.plane_a.heading_deg, 0.0)
+        self.assertAlmostEqual(scenario.plane_b.heading_deg, 180.0)

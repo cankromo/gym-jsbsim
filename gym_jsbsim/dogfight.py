@@ -7,6 +7,7 @@ import gym
 import numpy as np
 
 from gym_jsbsim import aircraft, properties as prp, simulation as simulation_module
+from gym_jsbsim.dogfight_scenarios import get_scenario
 from gym_jsbsim.multi_env import FormationMember, SharedWorldJsbSimEnv
 from gym_jsbsim.tasks import Shaping, TurnHeadingControlTask
 
@@ -163,12 +164,15 @@ class DogfightEnv:
                  aircraft_type=aircraft.f16,
                  spawn_separation_m: float = DEFAULT_SPAWN_SEPARATION_M,
                  altitude_separation_ft: float = DEFAULT_ALTITUDE_SEPARATION_FT,
-                 spawn_seed: Optional[int] = None):
+                 spawn_seed: Optional[int] = None,
+                 scenario_name: Optional[str] = None):
         apply_jsbsim_runtime_compat()
         self.agent_order = ("plane_a", "plane_b")
         self.spawn_separation_m = float(max(200.0, spawn_separation_m))
         self.altitude_separation_ft = float(max(0.0, altitude_separation_ft))
         self._spawn_rng = np.random.default_rng(spawn_seed)
+        self._scenario_name = scenario_name
+        self.current_scenario_name = scenario_name or "random"
         self.world = SharedWorldJsbSimEnv(
             members=(
                 FormationMember(
@@ -200,6 +204,23 @@ class DogfightEnv:
         }
         self._previous_ranges: Dict[str, float] = {}
 
+    def set_scenario(self, scenario_name: Optional[str]) -> None:
+        self._scenario_name = scenario_name
+        self.current_scenario_name = scenario_name or "random"
+
+    def _apply_scenario(self, scenario_name: str) -> None:
+        scenario = get_scenario(scenario_name)
+        member_a, member_b = self.world.members
+        member_a.north_offset_m = scenario.plane_a.north_offset_m
+        member_a.east_offset_m = scenario.plane_a.east_offset_m
+        member_a.altitude_offset_ft = scenario.plane_a.altitude_offset_ft
+        member_a.initial_conditions[prp.initial_heading_deg] = scenario.plane_a.heading_deg
+        member_b.north_offset_m = scenario.plane_b.north_offset_m
+        member_b.east_offset_m = scenario.plane_b.east_offset_m
+        member_b.altitude_offset_ft = scenario.plane_b.altitude_offset_ft
+        member_b.initial_conditions[prp.initial_heading_deg] = scenario.plane_b.heading_deg
+        self.current_scenario_name = scenario.name
+
     def _randomize_spawn_offsets(self) -> None:
         half_sep = 0.5 * self.spawn_separation_m
         bearing_rad = float(self._spawn_rng.uniform(0.0, 2.0 * math.pi))
@@ -213,6 +234,9 @@ class DogfightEnv:
         member_b.north_offset_m = north_offset
         member_b.east_offset_m = east_offset
         member_b.altitude_offset_ft = altitude_offset
+        member_a.initial_conditions.pop(prp.initial_heading_deg, None)
+        member_b.initial_conditions.pop(prp.initial_heading_deg, None)
+        self.current_scenario_name = "random"
 
     def close(self):
         self.world.close()
@@ -346,7 +370,10 @@ class DogfightEnv:
         }
 
     def reset(self) -> Dict[str, np.ndarray]:
-        self._randomize_spawn_offsets()
+        if self._scenario_name:
+            self._apply_scenario(self._scenario_name)
+        else:
+            self._randomize_spawn_offsets()
         self.world.reset()
         self._update_dynamic_targets()
         self._previous_ranges = {}
@@ -400,6 +427,7 @@ class DogfightEnv:
             row["elevation_error_deg"] = rel.elevation_error_deg
             row["heading_difference_deg"] = rel.heading_difference_deg
             row["opponent_plane_id"] = self._opponent(agent)
+            row["scenario_name"] = self.current_scenario_name
         return rows
 
 

@@ -8,6 +8,7 @@ import shimmy
 
 from gym_jsbsim.dogfight import DogfightEnv, telemetry_fieldnames
 from gym_jsbsim.dogfight_policies import StableOpponentPolicy, load_sb3_policy_opponent
+from gym_jsbsim.dogfight_scenarios import list_scenarios
 from gym_jsbsim.dogfight_sb3_env import DogfightSingleAgentEnv
 
 
@@ -163,29 +164,35 @@ def _eval_rollout(episodes: int,
                   policy_a,
                   policy_b,
                   csv_path: str,
-                  csv_plane_id: str = "all") -> None:
+                  csv_plane_id: str = "all",
+                  scenario_names: list[str] | None = None) -> None:
     os.makedirs(os.path.dirname(csv_path), exist_ok=True)
-    core = DogfightEnv()
     rows = []
+    scenario_cycle = scenario_names or [None]
+    core = DogfightEnv(scenario_name=scenario_cycle[0])
     try:
-        for episode in range(episodes):
-            obs = core.reset()
-            policy_a.reset()
-            policy_b.reset()
-            for step in range(max_steps):
-                action_a = policy_a.action(obs["plane_a"], core.action_spaces["plane_a"])
-                action_b = policy_b.action(obs["plane_b"], core.action_spaces["plane_b"])
-                obs, rewards, dones, infos = core.step({
-                    "plane_a": np.asarray(action_a, dtype=np.float32),
-                    "plane_b": np.asarray(action_b, dtype=np.float32),
-                })
-                del infos
-                step_rows = core.telemetry_rows(episode=episode, step=step, rewards=rewards, dones=dones)
-                if csv_plane_id != "all":
-                    step_rows = [row for row in step_rows if row["plane_id"] == csv_plane_id]
-                rows.extend(step_rows)
-                if dones.get("__all__", False):
-                    break
+        episode_index = 0
+        for scenario_name in scenario_cycle:
+            for _ in range(episodes):
+                core.set_scenario(scenario_name)
+                obs = core.reset()
+                policy_a.reset()
+                policy_b.reset()
+                for step in range(max_steps):
+                    action_a = policy_a.action(obs["plane_a"], core.action_spaces["plane_a"])
+                    action_b = policy_b.action(obs["plane_b"], core.action_spaces["plane_b"])
+                    obs, rewards, dones, infos = core.step({
+                        "plane_a": np.asarray(action_a, dtype=np.float32),
+                        "plane_b": np.asarray(action_b, dtype=np.float32),
+                    })
+                    del infos
+                    step_rows = core.telemetry_rows(episode=episode_index, step=step, rewards=rewards, dones=dones)
+                    if csv_plane_id != "all":
+                        step_rows = [row for row in step_rows if row["plane_id"] == csv_plane_id]
+                    rows.extend(step_rows)
+                    if dones.get("__all__", False):
+                        break
+                episode_index += 1
     finally:
         core.close()
 
@@ -203,7 +210,8 @@ def eval_duel(episodes: int,
               model_b_path: str,
               vecnorm_b_path: str,
               csv_path: str,
-              csv_plane_id: str = "all") -> None:
+              csv_plane_id: str = "all",
+              scenario_names: list[str] | None = None) -> None:
     policy_a = _load_frozen_opponent("plane_a", model_a_path, vecnorm_a_path)
     policy_b = _load_frozen_opponent("plane_b", model_b_path, vecnorm_b_path)
     _eval_rollout(
@@ -213,6 +221,7 @@ def eval_duel(episodes: int,
         policy_b=policy_b,
         csv_path=csv_path,
         csv_plane_id=csv_plane_id,
+        scenario_names=scenario_names,
     )
 
 
@@ -222,7 +231,8 @@ def eval_single_agent(controlled_agent: str,
                       model_path: str,
                       vecnorm_path: str,
                       csv_path: str,
-                      csv_plane_id: str = "all") -> None:
+                      csv_plane_id: str = "all",
+                      scenario_names: list[str] | None = None) -> None:
     if controlled_agent == "plane_a":
         policy_a = _load_frozen_opponent("plane_a", model_path, vecnorm_path)
         policy_b = StableOpponentPolicy()
@@ -237,7 +247,16 @@ def eval_single_agent(controlled_agent: str,
         policy_b=policy_b,
         csv_path=csv_path,
         csv_plane_id=csv_plane_id,
+        scenario_names=scenario_names,
     )
+
+
+def _resolve_eval_scenarios(scenario_set: str, scenario_name: str) -> list[str] | None:
+    if scenario_name:
+        return [scenario_name]
+    if scenario_set == "all":
+        return list_scenarios()
+    return None
 
 
 def parse_args() -> argparse.Namespace:
@@ -256,6 +275,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--vecnorm-b-path", default=DEFAULT_VECNORM_B_PATH)
     parser.add_argument("--csv-path", default=DEFAULT_EVAL_CSV)
     parser.add_argument("--csv-plane-id", choices=("all", "plane_a", "plane_b"), default="all")
+    parser.add_argument("--scenario-set", choices=("all", "random"), default="all")
+    parser.add_argument("--scenario-name", default="")
     return parser.parse_args()
 
 
@@ -297,6 +318,7 @@ def main() -> None:
         return
 
     if args.mode == "eval_a":
+        scenario_names = _resolve_eval_scenarios(args.scenario_set, args.scenario_name)
         eval_single_agent(
             controlled_agent="plane_a",
             episodes=args.episodes,
@@ -305,10 +327,12 @@ def main() -> None:
             vecnorm_path=args.vecnorm_a_path,
             csv_path=args.csv_path,
             csv_plane_id=args.csv_plane_id,
+            scenario_names=scenario_names,
         )
         return
 
     if args.mode == "eval_b":
+        scenario_names = _resolve_eval_scenarios(args.scenario_set, args.scenario_name)
         eval_single_agent(
             controlled_agent="plane_b",
             episodes=args.episodes,
@@ -317,9 +341,11 @@ def main() -> None:
             vecnorm_path=args.vecnorm_b_path,
             csv_path=args.csv_path,
             csv_plane_id=args.csv_plane_id,
+            scenario_names=scenario_names,
         )
         return
 
+    scenario_names = _resolve_eval_scenarios(args.scenario_set, args.scenario_name)
     eval_duel(
         episodes=args.episodes,
         max_steps=args.max_steps,
@@ -329,6 +355,7 @@ def main() -> None:
         vecnorm_b_path=args.vecnorm_b_path,
         csv_path=args.csv_path,
         csv_plane_id=args.csv_plane_id,
+        scenario_names=scenario_names,
     )
 
 

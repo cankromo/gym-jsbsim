@@ -733,9 +733,19 @@
     state.episodes.forEach((ep) => {
       const opt = document.createElement('option');
       opt.value = String(ep);
-      opt.textContent = `Episode ${ep}`;
+      opt.textContent = `Episode ${ep} - ${episodeScenarioName(ep)}`;
       episodeSel.appendChild(opt);
     });
+  }
+
+  function episodeScenarioName(ep) {
+    for (const label of state.labels) {
+      const rows = (state.aircraftRows[label] || []).filter(r => parseInt(r.episode || '0', 10) === ep);
+      if (rows.length) {
+        return (rows[0].scenario_name || 'random').trim() || 'random';
+      }
+    }
+    return 'random';
   }
 
   function geoSeries(rows) {
@@ -1182,9 +1192,10 @@
       $('status').style.color = '#f87171';
       return;
     }
+    const scenario = episodeScenarioName(ep);
     plotAll();
     setMetrics(0);
-    $('status').textContent = `Episode ${ep}: ${state.aircraftEpisodeRows.map(e => `${e.label}=${e.rows.length}`).join(', ')}`;
+    $('status').textContent = `Episode ${ep} | scenario ${scenario}: ${state.aircraftEpisodeRows.map(e => `${e.label}=${e.rows.length}`).join(', ')}`;
     $('status').style.color = '#34d399';
   }
 

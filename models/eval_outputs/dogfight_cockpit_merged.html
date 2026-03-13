@@ -666,7 +666,9 @@
 
     function updateStatus() {
       const opp = opponentPlane() || "none";
-      $("status").textContent = `Episode ${state.episode} | cockpit ${state.plane} | target ${opp}`;
+      const s = series();
+      const scenario = s && s.scenario_name && s.scenario_name.length ? s.scenario_name[Math.min(Math.floor(state.idx), s.scenario_name.length - 1)] : "random";
+      $("status").textContent = `Episode ${state.episode} | scenario ${scenario} | cockpit ${state.plane} | target ${opp}`;
     }
 
     function resize() {
