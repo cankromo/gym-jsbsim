@@ -6,17 +6,19 @@
   <title>Dogfight Cockpit Playback</title>
   <style>
     :root {
-      --bg0: #05070d;
-      --bg1: #08101f;
-      --panel: rgba(10, 16, 28, 0.84);
-      --panel-2: rgba(14, 23, 37, 0.88);
-      --line: rgba(126, 163, 212, 0.28);
-      --text: #e8f0ff;
-      --muted: #97aac7;
-      --hud: #7df9ff;
-      --warn: #ffb703;
-      --danger: #ff5e5b;
-      --good: #52ffa8;
+      --brand-blue: #263685;
+      --brand-red: #DD140E;
+      --bg0: #050816;
+      --bg1: #0c1438;
+      --panel: rgba(17, 26, 67, 0.84);
+      --panel-2: rgba(20, 31, 76, 0.9);
+      --line: rgba(110, 132, 214, 0.34);
+      --text: #eef3ff;
+      --muted: #aebce8;
+      --hud: #eef3ff;
+      --warn: #DD140E;
+      --danger: #ff726d;
+      --good: #9ef0b0;
     }
     * { box-sizing: border-box; }
     html, body {
@@ -27,8 +29,9 @@
       color: var(--text);
       font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
       background:
-        radial-gradient(1200px 700px at 10% 0%, rgba(125, 249, 255, 0.06), transparent 55%),
-        radial-gradient(900px 560px at 90% 100%, rgba(255, 183, 3, 0.08), transparent 55%),
+        radial-gradient(1000px 560px at 8% 6%, rgba(38, 54, 133, 0.18), transparent 60%),
+        radial-gradient(960px 540px at 92% -8%, rgba(221, 20, 14, 0.16), transparent 62%),
+        radial-gradient(780px 460px at 55% 120%, rgba(238, 243, 255, 0.08), transparent 62%),
         linear-gradient(180deg, var(--bg0), var(--bg1));
     }
     #root {
@@ -43,7 +46,8 @@
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 16px;
-      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+      box-shadow: 0 18px 42px rgba(2, 8, 23, 0.52);
+      backdrop-filter: blur(8px);
     }
     #topbar {
       display: grid;
@@ -52,15 +56,36 @@
       align-items: center;
       padding: 12px;
     }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      min-width: 0;
+    }
+    .brand img {
+      width: 88px;
+      height: 88px;
+      object-fit: contain;
+      flex: 0 0 auto;
+      filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.28));
+    }
+    .brand-copy {
+      min-width: 0;
+    }
     #title {
       font-size: 20px;
-      font-weight: 760;
+      font-weight: 900;
       letter-spacing: 0.2px;
+      font-family: "NeoSans Pro Black Italic", "NeoSans Pro", "IBM Plex Sans", "Segoe UI", sans-serif;
+      font-style: italic;
     }
     #subtitle {
       color: var(--muted);
       font-size: 12px;
       margin-top: 4px;
+      font-family: "NeoSans Pro Medium Italic", "NeoSans Pro", "IBM Plex Sans", "Segoe UI", sans-serif;
+      font-style: italic;
+      font-weight: 500;
     }
     .ctrl {
       display: flex;
@@ -77,7 +102,7 @@
       border: 1px solid rgba(96, 124, 168, 0.5);
     }
     select, button {
-      background: #0a1321;
+      background: #111a43;
       color: var(--text);
       padding: 8px 10px;
     }
@@ -86,16 +111,17 @@
       font-weight: 700;
     }
     #btnPlay {
-      background: linear-gradient(135deg, #00b4d8, #0077b6);
-      color: white;
+      color: var(--text);
+      border-color: rgba(221, 20, 14, 0.55);
+      background: linear-gradient(135deg, var(--brand-red), var(--brand-blue));
     }
     #stage {
       position: relative;
       overflow: hidden;
       min-height: 540px;
       background:
-        radial-gradient(1000px 600px at 50% -20%, rgba(125, 249, 255, 0.06), transparent 60%),
-        linear-gradient(180deg, #08121f, #04080f);
+        radial-gradient(1000px 600px at 50% -20%, rgba(238, 243, 255, 0.06), transparent 60%),
+        linear-gradient(180deg, #0b1335, #060b1c);
     }
     #view {
       position: absolute;
@@ -108,6 +134,7 @@
       position: absolute;
       inset: 18px;
       border: 1px solid rgba(125, 249, 255, 0.14);
+      border: 1px solid rgba(110, 132, 214, 0.24);
       border-radius: 28px;
       pointer-events: none;
       box-shadow: inset 0 0 120px rgba(0, 0, 0, 0.42);
@@ -120,6 +147,7 @@
       height: 200px;
       transform: translateX(-50%);
       border: 2px solid rgba(125, 249, 255, 0.14);
+      border: 2px solid rgba(110, 132, 214, 0.18);
       border-bottom: none;
       border-radius: 520px 520px 0 0;
       box-shadow:
@@ -137,6 +165,8 @@
       background: linear-gradient(180deg, rgba(18, 29, 45, 0.15), rgba(5, 10, 18, 0.85));
       border-left: 1px solid rgba(125, 249, 255, 0.16);
       border-right: 1px solid rgba(125, 249, 255, 0.16);
+      border-left: 1px solid rgba(110, 132, 214, 0.18);
+      border-right: 1px solid rgba(110, 132, 214, 0.18);
       box-shadow: 0 0 18px rgba(0, 0, 0, 0.25);
       pointer-events: none;
     }
@@ -148,7 +178,7 @@
     .hudBox {
       position: absolute;
       background: rgba(2, 8, 18, 0.56);
-      border: 1px solid rgba(125, 249, 255, 0.22);
+      border: 1px solid rgba(110, 132, 214, 0.28);
       border-radius: 14px;
       padding: 10px 12px;
       color: var(--hud);
@@ -199,7 +229,7 @@
       transform: translate(-50%, -50%);
       border: 2px solid var(--warn);
       border-radius: 8px;
-      box-shadow: 0 0 18px rgba(255, 183, 3, 0.32);
+      box-shadow: 0 0 18px rgba(221, 20, 14, 0.32);
       display: none;
     }
     #targetLabel {
@@ -209,7 +239,7 @@
       font-family: "IBM Plex Mono", monospace;
       font-size: 12px;
       font-weight: 700;
-      text-shadow: 0 0 10px rgba(255, 183, 3, 0.4);
+      text-shadow: 0 0 10px rgba(221, 20, 14, 0.45);
       display: none;
       white-space: nowrap;
     }
@@ -220,16 +250,16 @@
       width: 54px;
       height: 54px;
       transform: translate(-50%, -50%);
-      border: 2px solid rgba(125, 249, 255, 0.75);
+      border: 2px solid rgba(238, 243, 255, 0.78);
       border-radius: 50%;
-      box-shadow: 0 0 12px rgba(125, 249, 255, 0.16);
+      box-shadow: 0 0 12px rgba(238, 243, 255, 0.16);
     }
     #gunsight::before, #gunsight::after {
       content: "";
       position: absolute;
       left: 50%;
       top: 50%;
-      background: rgba(125, 249, 255, 0.8);
+      background: rgba(238, 243, 255, 0.8);
       transform: translate(-50%, -50%);
     }
     #gunsight::before { width: 2px; height: 66px; }
@@ -414,9 +444,12 @@
 <body>
   <div id="root">
     <div id="topbar" class="panel">
-      <div>
-        <div id="title">Dogfight First-Person Cockpit</div>
-        <div id="subtitle">Standalone playback built from eval CSV. Choose episode and cockpit aircraft.</div>
+      <div class="brand">
+        <img src="./logo.png" alt="Company logo" />
+        <div class="brand-copy">
+          <div id="title">TURKISH</div>
+          <div id="subtitle">AEROSPACE</div>
+        </div>
       </div>
       <div class="ctrl">
         <label for="episodeSel">Episode</label>
