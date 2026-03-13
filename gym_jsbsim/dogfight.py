@@ -151,10 +151,8 @@ class DogfightEnv:
     FIRE_RANGE_M = 1200.0
     OPTIMAL_RANGE_M = 800.0
     RANGE_SCALE_M = 4000.0
-    ROLL_ERROR_SCALE_DEG = 20.0
     DEFENSIVE_CONE_WEIGHT = 0.20
     DEFENSIVE_FIRE_SOLUTION_PENALTY = 0.60
-    ROLL_QUALITY_WEIGHT = 0.15
     DEFAULT_SPAWN_SEPARATION_M = 900.0
     DEFAULT_ALTITUDE_SEPARATION_FT = 200.0
 
@@ -306,28 +304,6 @@ class DogfightEnv:
             "fire_solution": fire_solution,
         }
 
-    def _target_roll_state(self, agent: str) -> tuple[float, float, float]:
-        own_sim = self._sim(agent)
-        task = self.world.tasks[agent]
-        current_roll_deg = math.degrees(float(own_sim[prp.roll_rad]))
-        if hasattr(task, "target_roll_rad"):
-            target_roll_deg = math.degrees(float(own_sim[task.target_roll_rad]))
-        else:
-            track_err = float(own_sim[task.track_error_deg]) if hasattr(task, "track_error_deg") else 0.0
-            target_roll_deg = float(task.get_target_roll_deg(track_err)) if hasattr(task, "get_target_roll_deg") else 0.0
-        roll_error_deg = current_roll_deg - target_roll_deg
-        return current_roll_deg, target_roll_deg, roll_error_deg
-
-    def _roll_quality(self, agent: str) -> Dict[str, float]:
-        current_roll_deg, target_roll_deg, roll_error_deg = self._target_roll_state(agent)
-        roll_quality = max(0.0, 1.0 - abs(roll_error_deg) / self.ROLL_ERROR_SCALE_DEG)
-        return {
-            "current_roll_deg": current_roll_deg,
-            "target_roll_deg": target_roll_deg,
-            "roll_error_deg": roll_error_deg,
-            "roll_quality": roll_quality,
-        }
-
     def _reward_for(self, agent: str) -> tuple[float, Dict]:
         own_sim = self._sim(agent)
         opponent_sim = self._sim(self._opponent(agent))
@@ -335,7 +311,6 @@ class DogfightEnv:
         threat_rel = compute_relative_geometry(opponent_sim, own_sim)
         shot = self._shot_quality(rel)
         threat = self._shot_quality(threat_rel)
-        roll = self._roll_quality(agent)
         prev_range = self._previous_ranges.get(agent)
         closure_bonus = 0.0 if prev_range is None else max(-0.15, min(0.15, (prev_range - rel.range_m) / 250.0))
         self._previous_ranges[agent] = rel.range_m
@@ -347,7 +322,6 @@ class DogfightEnv:
             0.45 * float(shot["aim_quality"])
             + 0.15 * float(shot["elevation_quality"])
             + 0.25 * float(shot["range_quality"])
-            + self.ROLL_QUALITY_WEIGHT * float(roll["roll_quality"])
             + 0.15 * (closure_bonus + 0.15)
             + (0.75 if shot["fire_solution"] else 0.0)
             - defensive_penalty
@@ -358,10 +332,6 @@ class DogfightEnv:
             "aim_quality": float(shot["aim_quality"]),
             "elevation_quality": float(shot["elevation_quality"]),
             "range_quality": float(shot["range_quality"]),
-            "roll_quality": float(roll["roll_quality"]),
-            "target_roll_deg": float(roll["target_roll_deg"]),
-            "current_roll_deg": float(roll["current_roll_deg"]),
-            "roll_error_deg": float(roll["roll_error_deg"]),
             "closure_bonus": closure_bonus,
             "fire_solution": bool(shot["fire_solution"]),
             "defensive_cone_penalty": self.DEFENSIVE_CONE_WEIGHT * float(threat["aim_quality"]),

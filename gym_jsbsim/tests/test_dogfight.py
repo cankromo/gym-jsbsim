@@ -1,6 +1,5 @@
 import math
 import unittest
-import types
 
 from gym_jsbsim import properties as prp
 from gym_jsbsim.dogfight import DogfightEnv, compute_relative_geometry, telemetry_fieldnames
@@ -76,38 +75,6 @@ class TestDogfightRewardHelpers(unittest.TestCase):
         target = make_sim(51.3790, -2.3273, 5000, 0.0)
         threat = env._shot_quality(compute_relative_geometry(target, own))
         self.assertFalse(threat["fire_solution"])
-
-    def test_roll_quality_is_high_when_current_roll_matches_target(self):
-        env = DogfightEnv.__new__(DogfightEnv)
-        env.world = types.SimpleNamespace(
-            sims={"plane_a": FakeSim()},
-            tasks={"plane_a": types.SimpleNamespace(target_roll_rad=prp.Property("target/roll-rad", ""))},
-        )
-        env._sim = lambda agent: env.world.sims[agent]
-        sim = env.world.sims["plane_a"]
-        sim[prp.roll_rad] = math.radians(25.0)
-        sim[env.world.tasks["plane_a"].target_roll_rad] = math.radians(25.0)
-
-        info = env._roll_quality("plane_a")
-
-        self.assertAlmostEqual(info["roll_quality"], 1.0)
-        self.assertAlmostEqual(info["roll_error_deg"], 0.0)
-
-    def test_roll_quality_is_zero_when_roll_error_exceeds_scale(self):
-        env = DogfightEnv.__new__(DogfightEnv)
-        env.world = types.SimpleNamespace(
-            sims={"plane_a": FakeSim()},
-            tasks={"plane_a": types.SimpleNamespace(target_roll_rad=prp.Property("target/roll-rad", ""))},
-        )
-        env._sim = lambda agent: env.world.sims[agent]
-        sim = env.world.sims["plane_a"]
-        sim[prp.roll_rad] = math.radians(45.0)
-        sim[env.world.tasks["plane_a"].target_roll_rad] = math.radians(0.0)
-
-        info = env._roll_quality("plane_a")
-
-        self.assertAlmostEqual(info["roll_quality"], 0.0)
-        self.assertAlmostEqual(info["roll_error_deg"], 45.0)
 
 
 class TestDogfightScenarios(unittest.TestCase):
